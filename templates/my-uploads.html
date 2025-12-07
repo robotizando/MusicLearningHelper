@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>M-Helper - Meus Uploads</title>
+
+    <!-- Bootstrap -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/custom.css" rel="stylesheet">
+
+    <!-- fonts -->
+    <link href='http://fonts.googleapis.com/css?family=Nixie+One' rel='stylesheet' type='text/css'>
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,900" rel="stylesheet">
+
+    <style>
+        .badge {
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .badge-success {
+            background-color: #5cb85c;
+            color: white;
+        }
+        .badge-warning {
+            background-color: #f0ad4e;
+            color: white;
+        }
+        .badge-danger {
+            background-color: #d9534f;
+            color: white;
+        }
+        .badge-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+        .text-muted {
+            color: #999;
+            font-size: 12px;
+        }
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+    </style>
+  </head>
+  <body>
+
+    <div class="loader">
+       <div>
+        <img src="/images/icons/preloader.gif" />
+       </div>
+    </div>
+
+    <div class="container-fluid">
+		<div class="row">
+
+        	<div class="col-sm-5 left-wrapper">
+            	<div class="event-banner-wrapper">
+                	<div class="logo"><a href="/">
+                        <h1>Estudio da Escola</h1>
+                      </a>
+                    </div>
+
+                	<h2>
+                    Minhas Músicas<br>
+                    <span>Gerencie suas músicas processadas</span>
+                    </h2>
+                    <p>Ferramenta criada por <a href="https://robotizando.com.br" target="_blank">Daniel O. Basconcello Filho</a></p>
+                </div>
+          </div>
+
+          <div class="col-sm-7 right-wrapper">
+            	<div class="event-ticket-wrapper">
+
+                  <div class="event-tab">
+
+                  <!-- Nav tabs -->
+                  <ul class="nav nav-tabs" role="tablist">
+                    <li role="presentation" class="active"><a href="/my-uploads">Minhas Músicas</a></li>
+                    <li role="presentation"><a href="/upload">Upload de Áudio</a></li>
+                    <li role="presentation"><a href="/">Home</a></li>
+                  </ul>
+
+                  <!-- Tab panes -->
+                  <div class="tab-content">
+
+                    <div role="tabpanel" class="tab-pane fade in active" id="uploads">
+                    	<div class="row">
+                        {{UPLOADS}}
+                      </div>
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+            </div>
+        </div>
+    </div>
+
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/allscript.js"></script>
+  </body>
+</html>

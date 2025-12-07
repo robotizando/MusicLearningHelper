@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <title>M-Helper - Opcode Music Experiments</title>
+
+    <!-- Bootstrap -->
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/custom.css" rel="stylesheet">
+    
+    <!-- fonts -->
+    <link href='http://fonts.googleapis.com/css?family=Nixie+One' rel='stylesheet' type='text/css'>
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,900" rel="stylesheet">
+
+  </head>
+  <body>
+    
+    <div class="loader">
+       <div>
+        <img src="images/icons/preloader.gif" />
+       </div>
+    </div>
+    
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-5 left-wrapper">
+                <div class="event-banner-wrapper">
+                    <div class="logo"><a href="/">
+                        <h1>Estudio da Escola</h1>
+                      </a>
+                    </div>
+                
+                    <h2>
+                    Pratica de Banda<br>Sábado 
+                    <span>Todo Sábado, 10:00hs</span>
+                    </h2>
+                    <p>Ferramenta criada por <a href="https://robotizando.com.br" target="_blank">Daniel O. Basconcello Filho</a></p>
+                </div>
+            </div>
+
+
+            <div class="col-sm-7 right-wrapper">
+                <div class="event-ticket-wrapper">
+                    
+                <div class="event-tab">
+                
+                  <!-- Nav tabs -->
+                  <ul class="nav nav-tabs" role="tablist">
+                    <li role="presentation"> <a href="/my-uploads">Minhas Músicas</a></li>
+                    <li role="presentation"> <a href="/upload">Upload de Áudio</a></li>
+                    <li role="presentation"> <a href="#termCondition" aria-controls="termCondition" role="tab" data-toggle="tab">Termos & Condições</a></li>
+                  </ul>
+                
+                  <!-- Tab panes -->
+                  <div class="tab-content">
+
+                    <div role="tabpanel" class="active" id="home">
+
+                                    <h1 class="mb-4 text-center">🎶 Music Learning Helper 🎶</h1>
+                                    <p class="lead text-center">Ferramenta para separação de faixas de áudio e prática musical.</p>
+
+                                    <div class="row mt-4">
+                                      <div class="col-md-12">
+                                          <a href="/upload" class="btn btn-primary w-100 p-3 fs-5">
+                                                🎵 Upload de Áudio
+                                                <small class="d-block">Envie suas músicas para separação de faixas</small>
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    <div class="row mt-4">
+                                      <div class="col-md-12">
+                                          <a href="/my-uploads" class="btn btn-success w-100 p-3 fs-5">
+                                                🎛️ Minhas Músicas
+                                                <small class="d-block">Gerencie e toque suas músicas processadas</small>
+                                            </a>
+                                        </div>
+                                    </div>
+
+
+                    </div>
+
+                    <div role="tabpanel" class="tab-pane fade" id="termCondition">
+                        {{TERMOS}}
+                    </div>
+                
+                  </div>
+                
+                </div>
+
+
+
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="js/bootstrap.min.js"></script>
+    <script src="js/allscript.js"></script>
+  </body>
+</html>

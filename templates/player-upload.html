@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{NOME}} - {{ARTISTA}} - Multi Track Player</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdn.rawgit.com/download/polymer-cdn/1.5.0/lib/webcomponentsjs/webcomponents-lite.min.js"></script>
+    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+    <link rel="stylesheet" href="/css/trackswitch.css" />
+    <style media="screen">
+        body {
+            font-family: sans-serif;
+            background-color: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            margin: 10px 0;
+            font-size: 32px;
+        }
+        .header h2 {
+            margin: 5px 0;
+            font-size: 24px;
+            color: #888;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #4CAF50;
+            text-decoration: none;
+            font-size: 16px;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .player {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <a href="/my-uploads" class="back-link">← Voltar para Meus Uploads</a>
+    <h1>{{NOME}}</h1>
+    <h2>{{ARTISTA}}</h2>
+</div>
+
+<div class="waveform-container" style="width: 100%; margin: 20px 0; position: relative;">
+    <div id="waveform-display" style="position: relative; width: 100%; height: 300px; background: #1a1a1a; border-radius: 8px; overflow: hidden; cursor: pointer; padding: 0; margin: 0;">
+        <img id="waveform-vocals" src="{{URL}}/vocals.png" class="waveform-layer" data-track="vocals" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none;">
+        <img id="waveform-drums" src="{{URL}}/drums.png" class="waveform-layer" data-track="drums" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none;">
+        <img id="waveform-bass" src="{{URL}}/bass.png" class="waveform-layer" data-track="bass" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none;">
+        <img id="waveform-other" src="{{URL}}/other.png" class="waveform-layer" data-track="other" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none;">
+        <div id="waveform-cursor" style="position: absolute; top: 0; left: 0; width: 2px; height: 100%; background: #4CAF50; z-index: 10; pointer-events: none; display: none;"></div>
+        <div id="waveform-hover" style="position: absolute; top: 0; left: 0; width: 1px; height: 100%; background: rgba(255, 255, 255, 0.3); z-index: 9; pointer-events: none; display: none;"></div>
+    </div>
+</div>
+
+<div class="player">
+    <ts-track title="Vocais (Vocals)" data-img="vocals.png" data-stem="vocals">
+        <ts-source src="{{URL}}/vocals.wav"></ts-source>
+    </ts-track>
+    <ts-track title="Baixo (Bass)" data-img="bass.png" data-stem="bass">
+        <ts-source src="{{URL}}/bass.wav"></ts-source>
+    </ts-track>
+    <ts-track title="Bateria (Drums)" data-img="drums.png" data-stem="drums">
+        <ts-source src="{{URL}}/drums.wav"></ts-source>
+    </ts-track>
+    <ts-track title="Outros Instrumentos (Other)" data-img="other.png" data-stem="other">
+        <ts-source src="{{URL}}/other.wav"></ts-source>
+    </ts-track>
+</div>
+
+
+<script src="/js/jquery-3.2.1.min.js.js"></script>
+<script src="/js/trackswitch.js"></script>
+
+<script type="text/javascript">
+    jQuery(document).ready(function() {
+        jQuery(".player").trackSwitch();
+
+        // Referência ao player
+        var player = jQuery(".player").data('plugin_trackSwitch');
+        var $waveformDisplay = jQuery('#waveform-display');
+        var $cursor = jQuery('#waveform-cursor');
+        var $hoverLine = jQuery('#waveform-hover');
+        var autoplay = {{AUTOPLAY}};
+
+        // Função para atualizar waveforms visíveis
+        function updateWaveforms() {
+            // Esconde todas as waveforms primeiro
+            jQuery('.waveform-layer').hide();
+
+            // Mostra waveforms apenas das faixas ativas
+            jQuery('ts-track').each(function() {
+                const $track = jQuery(this);
+                const stem = $track.attr('data-stem');
+                const isActive = !$track.hasClass('muted');
+
+                if (isActive && stem) {
+                    jQuery(`#waveform-${stem}`).show();
+                }
+            });
+        }
+
+        // Função para atualizar a posição do cursor
+        function updateCursorPosition() {
+            if (player && player.longestDuration > 0) {
+                var position = player.position || 0;
+                var percentage = (position / player.longestDuration) * 100;
+
+                // Garante que o cursor está exatamente na posição correta
+                // sem considerar padding ou margin
+                $cursor.css({
+                    'left': percentage + '%',
+                    'transform': 'translateX(-1px)' // Centraliza a linha de 2px
+                });
+
+                // Mostra cursor apenas se o player estiver carregado
+                if (player.longestDuration > 0) {
+                    $cursor.show();
+                }
+            }
+        }
+
+        // Click na waveform para navegar
+        $waveformDisplay.on('click', function(e) {
+            if (!player || player.longestDuration === 0) return;
+
+            var offsetX = e.pageX - jQuery(this).offset().left;
+            var width = jQuery(this).width();
+            var percentage = offsetX / width;
+            var newPosition = percentage * player.longestDuration;
+
+            // Limita a posição aos bounds
+            newPosition = Math.max(0, Math.min(newPosition, player.longestDuration));
+
+            // Se está tocando, para e reinicia na nova posição
+            if (player.playing) {
+                player.stopAudio();
+                player.position = newPosition;
+                player.startAudio();
+            } else {
+                // Se não está tocando, apenas atualiza a posição
+                player.position = newPosition;
+                player.updateMainControls();
+            }
+
+            updateCursorPosition();
+        });
+
+        // Hover na waveform para preview
+        $waveformDisplay.on('mousemove', function(e) {
+            var offsetX = e.pageX - jQuery(this).offset().left;
+            var width = jQuery(this).width();
+            var percentage = (offsetX / width) * 100;
+
+            $hoverLine.css('left', percentage + '%');
+            $hoverLine.show();
+        });
+
+        $waveformDisplay.on('mouseleave', function() {
+            $hoverLine.hide();
+        });
+
+        // Atualiza cursor periodicamente durante reprodução
+        setInterval(function() {
+            if (player) {
+                // Atualiza sempre, mesmo quando pausado, para garantir sincronização
+                updateCursorPosition();
+            }
+        }, 33); // 30 FPS para movimento mais suave e responsivo
+
+        // Monitora mudanças nos controles de faixas
+        // Usando MutationObserver para detectar mudanças nas classes
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    updateWaveforms();
+                }
+            });
+        });
+
+        // Observa mudanças em cada faixa
+        jQuery('ts-track').each(function() {
+            observer.observe(this, {
+                attributes: true,
+                attributeFilter: ['class']
+            });
+        });
+
+        // Também monitora cliques diretos
+        jQuery(document).on('click', 'ts-track, .track-control', function() {
+            setTimeout(updateWaveforms, 100);
+        });
+
+        // Atualização inicial (mostra todas as waveforms inicialmente)
+        setTimeout(function() {
+            updateWaveforms();
+            updateCursorPosition();
+        }, 500);
+
+        // Autoplay se solicitado
+        if (autoplay) {
+            // Aguarda o player carregar completamente antes de iniciar
+            jQuery('.player').one('loaded', function() {
+                setTimeout(function() {
+                    if (player && !player.playing) {
+                        // Simula clique no botão play/pause
+                        jQuery('.playpause').trigger('click');
+                    }
+                }, 1000);
+            });
+
+            // Fallback caso 'loaded' não dispare: tenta clicar no overlay para ativar
+            setTimeout(function() {
+                var $overlay = jQuery('.overlay .activate');
+                if ($overlay.is(':visible')) {
+                    $overlay.trigger('click');
+                    // Após ativar, aguarda e inicia a reprodução
+                    setTimeout(function() {
+                        if (player && !player.playing) {
+                            jQuery('.playpause').trigger('click');
+                        }
+                    }, 1500);
+                }
+            }, 800);
+        }
+    });
+</script>
+</body>
+</html>

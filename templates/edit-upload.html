@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Editar Música - M-Helper</title>
+
+    <!-- Bootstrap -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/custom.css" rel="stylesheet">
+
+    <!-- fonts -->
+    <link href='http://fonts.googleapis.com/css?family=Nixie+One' rel='stylesheet' type='text/css'>
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,900" rel="stylesheet">
+
+    <style>
+      .form-container {
+        max-width: 600px;
+        margin: 40px auto;
+        padding: 30px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      }
+      .btn-group-custom {
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div class="loader">
+       <div>
+        <img src="/images/icons/preloader.gif" />
+       </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-5 left-wrapper">
+                <div class="event-banner-wrapper">
+                    <div class="logo"><a href="/">
+                        <h1>Estudio da Escola</h1>
+                      </a>
+                    </div>
+
+                    <h2>
+                    Editar Música<br>
+                    <span>Atualize as informações da música</span>
+                    </h2>
+                    <p>Ferramenta criada por <a href="https://robotizando.com.br" target="_blank">Daniel O. Basconcello Filho</a></p>
+                </div>
+            </div>
+
+            <div class="col-sm-7 right-wrapper">
+                <div class="event-ticket-wrapper">
+
+                <div class="event-tab">
+
+                  <div class="tab-content">
+                    <div role="tabpanel" class="active" id="edit-panel">
+
+                      <div class="form-container">
+                        <h3 class="text-center mb-4">Editar Informações</h3>
+
+                        <form action="/update/{{ID}}" method="POST">
+
+                          <div class="form-group">
+                            <label for="song_name">Nome da Música:</label>
+                            <input type="text" class="form-control" id="song_name" name="song_name"
+                                   value="{{NOME}}" required>
+                          </div>
+
+                          <div class="form-group">
+                            <label for="artist">Artista:</label>
+                            <input type="text" class="form-control" id="artist" name="artist"
+                                   value="{{ARTISTA}}" required>
+                          </div>
+
+                          <div class="form-group">
+                            <label>Arquivo Original:</label>
+                            <p class="form-control-static text-muted">{{FILENAME}}</p>
+                          </div>
+
+                          <div class="btn-group-custom">
+                            <button type="submit" class="btn btn-success btn-lg btn-block">
+                              Salvar Alterações
+                            </button>
+                            <a href="/my-uploads" class="btn btn-default btn-lg btn-block">
+                              Cancelar
+                            </a>
+                          </div>
+
+                        </form>
+
+                      </div>
+
+                    </div>
+                  </div>
+
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <!-- Bootstrap -->
+    <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/allscript.js"></script>
+
+  </body>
+</html>

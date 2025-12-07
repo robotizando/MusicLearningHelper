@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Upload de Áudio - M-Helper</title>
+
+    <!-- Bootstrap -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/custom.css" rel="stylesheet">
+
+    <!-- fonts -->
+    <link href='http://fonts.googleapis.com/css?family=Nixie+One' rel='stylesheet' type='text/css'>
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,900" rel="stylesheet">
+
+    <style>
+      .upload-area {
+        border: 3px dashed #ccc;
+        border-radius: 10px;
+        padding: 40px;
+        text-align: center;
+        background-color: #f9f9f9;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+
+      .upload-area:hover {
+        border-color: #5bc0de;
+        background-color: #f0f8ff;
+      }
+
+      .upload-area.dragover {
+        border-color: #5cb85c;
+        background-color: #e8f5e9;
+      }
+
+      .upload-icon {
+        font-size: 64px;
+        color: #5bc0de;
+        margin-bottom: 20px;
+      }
+
+      .file-info {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #e7f3ff;
+        border-radius: 5px;
+        display: none;
+      }
+
+      .progress {
+        display: none;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div class="loader">
+       <div>
+        <img src="/images/icons/preloader.gif" />
+       </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-5 left-wrapper">
+                <div class="event-banner-wrapper">
+                    <div class="logo"><a href="/">
+                        <h1>Estudio da Escola</h1>
+                      </a>
+                    </div>
+
+                    <h2>
+                    Upload de Áudio<br>
+                    <span>Envie seus arquivos de áudio</span>
+                    </h2>
+                    <p>Ferramenta criada por <a href="https://robotizando.com.br" target="_blank">Daniel O. Basconcello Filho</a></p>
+                </div>
+            </div>
+
+            <div class="col-sm-7 right-wrapper">
+                <div class="event-ticket-wrapper">
+
+                <div class="event-tab">
+
+                  <div class="tab-content">
+                    <div role="tabpanel" class="active" id="upload-panel">
+
+                      <h3 class="text-center mb-4">Enviar Arquivo de Áudio</h3>
+
+                      <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
+
+                        <div class="form-group">
+                          <label for="song_name">Nome da Música:</label>
+                          <input type="text" class="form-control" id="song_name" name="song_name" placeholder="Ex: Imagine">
+                        </div>
+
+                        <div class="form-group">
+                          <label for="artist">Artista:</label>
+                          <input type="text" class="form-control" id="artist" name="artist" placeholder="Ex: John Lennon">
+                        </div>
+
+                        <div class="upload-area" id="uploadArea">
+                          <div class="upload-icon">🎵</div>
+                          <h4>Arraste seu arquivo aqui</h4>
+                          <p>ou clique para selecionar</p>
+                          <input type="file" name="audioFile" id="audioFile" accept="audio/*" style="display: none;">
+                          <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('audioFile').click()">
+                            Selecionar Arquivo
+                          </button>
+                        </div>
+
+                        <div class="file-info" id="fileInfo">
+                          <h5>Arquivo selecionado:</h5>
+                          <p id="fileName"></p>
+                          <p id="fileSize"></p>
+                        </div>
+
+                        <div class="progress">
+                          <div class="progress-bar progress-bar-striped active" role="progressbar"
+                               aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%">
+                            Enviando...
+                          </div>
+                        </div>
+
+                        <div class="text-center" style="margin-top: 20px;">
+                          <button type="submit" class="btn btn-success btn-lg" id="submitBtn" disabled>
+                            Enviar Arquivo
+                          </button>
+                          <a href="/" class="btn btn-default btn-lg">
+                            Voltar
+                          </a>
+                        </div>
+
+                      </form>
+
+                      <div class="alert alert-info" style="margin-top: 30px;">
+                        <strong>Formatos aceitos:</strong> MP3, WAV, OGG, MP4<br>
+                        <strong>Tamanho máximo:</strong> 50 MB
+                      </div>
+
+                    </div>
+                  </div>
+
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <!-- Bootstrap -->
+    <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/allscript.js"></script>
+
+    <script>
+      // Elementos
+      const uploadArea = document.getElementById('uploadArea');
+      const fileInput = document.getElementById('audioFile');
+      const fileInfo = document.getElementById('fileInfo');
+      const fileName = document.getElementById('fileName');
+      const fileSize = document.getElementById('fileSize');
+      const submitBtn = document.getElementById('submitBtn');
+      const uploadForm = document.getElementById('uploadForm');
+      const progressBar = document.querySelector('.progress');
+
+      // Prevenir comportamento padrão de arrastar
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+      });
+
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      // Destacar área de drop
+      ['dragenter', 'dragover'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+          uploadArea.classList.add('dragover');
+        }, false);
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, () => {
+          uploadArea.classList.remove('dragover');
+        }, false);
+      });
+
+      // Lidar com drop
+      uploadArea.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        fileInput.files = files;
+        handleFiles(files);
+      });
+
+      // Lidar com seleção de arquivo
+      fileInput.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+      });
+
+      function handleFiles(files) {
+        if (files.length > 0) {
+          const file = files[0];
+
+          // Verificar se é arquivo de áudio
+          if (!file.type.startsWith('audio/')) {
+            alert('Por favor, selecione um arquivo de áudio válido!');
+            return;
+          }
+
+          // Verificar tamanho (50MB)
+          if (file.size > 50 * 1024 * 1024) {
+            alert('O arquivo é muito grande! Tamanho máximo: 50 MB');
+            return;
+          }
+
+          // Mostrar informações do arquivo
+          fileName.textContent = file.name;
+          fileSize.textContent = 'Tamanho: ' + (file.size / 1024 / 1024).toFixed(2) + ' MB';
+          fileInfo.style.display = 'block';
+          submitBtn.disabled = false;
+        }
+      }
+
+      // Mostrar barra de progresso ao enviar
+      uploadForm.addEventListener('submit', () => {
+        submitBtn.disabled = true;
+        progressBar.style.display = 'block';
+      });
+    </script>
+
+  </body>
+</html>
