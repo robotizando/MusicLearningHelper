@@ -32,14 +32,30 @@ else
     exit 1
 fi
 
-# Verifica Python3
-echo -n "Verificando Python3... "
-if command -v python3 &> /dev/null; then
-    PYTHON_VERSION=$(python3 --version)
+# Verifica Python3.10
+echo -n "Verificando Python3.10... "
+PYTHON_CMD=""
+if command -v python3.10 &> /dev/null; then
+    PYTHON_CMD="python3.10"
+    PYTHON_VERSION=$(python3.10 --version)
     echo -e "${GREEN}✓ Instalado ($PYTHON_VERSION)${NC}"
+elif command -v python3 &> /dev/null; then
+    PYTHON_VERSION=$(python3 --version | grep -oP '\d+\.\d+')
+    if [[ "$PYTHON_VERSION" == "3.10" ]]; then
+        PYTHON_CMD="python3"
+        echo -e "${GREEN}✓ Instalado (Python $PYTHON_VERSION)${NC}"
+    else
+        echo -e "${RED}✗ Python 3.10.x não encontrado${NC}"
+        echo "Versão atual: $(python3 --version)"
+        echo "Spleeter 2.4.0 requer Python 3.10.x"
+        echo "Por favor, instale Python 3.10:"
+        echo "  Ubuntu/Debian: sudo apt-get install python3.10 python3.10-venv python3.10-dev"
+        echo "  macOS: brew install python@3.10"
+        exit 1
+    fi
 else
     echo -e "${RED}✗ Python3 não encontrado${NC}"
-    echo "Por favor, instale Python 3.7 ou superior"
+    echo "Por favor, instale Python 3.10.x"
     exit 1
 fi
 
@@ -90,17 +106,21 @@ fi
 echo ""
 
 # Cria ambiente virtual Python
-echo "2. Criando ambiente virtual Python..."
+echo "2. Criando ambiente virtual Python com Python 3.10..."
 if [ ! -d "venv" ]; then
-    python3 -m venv venv
+    $PYTHON_CMD -m venv venv
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ Ambiente virtual criado${NC}"
+        echo -e "${GREEN}✓ Ambiente virtual criado com $($PYTHON_CMD --version)${NC}"
     else
         echo -e "${RED}✗ Erro ao criar ambiente virtual${NC}"
+        echo "Tente instalar: sudo apt-get install python3.10-venv"
         exit 1
     fi
 else
     echo -e "${YELLOW}⚠ Ambiente virtual já existe${NC}"
+    echo "   Verificando versão do Python no venv..."
+    VENV_PYTHON_VERSION=$(venv/bin/python --version)
+    echo "   $VENV_PYTHON_VERSION"
 fi
 
 echo ""
