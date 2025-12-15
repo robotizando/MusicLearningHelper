@@ -159,7 +159,8 @@ app.get('/', requireAuth, (req, res) => {
 
             // Adiciona menu de admin se usuário for admin
             const adminMenu = req.session.isAdmin ?
-                '<li role="presentation"><a href="/users">Gerenciar Usuários</a></li>' : '';
+                `<li role="presentation"><a href="/users">Gerenciar Usuários</a></li>
+                 <li role="presentation"><a href="/diagnostic">Diagnóstico Sistema</a></li>` : '';
 
             // Substitui os marcadores
             const finalHtml = templateHtml
