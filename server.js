@@ -671,16 +671,17 @@ app.post('/upload', requireAuth, upload.single('audioFile'), (req, res) => {
         logger.info(`Arquivo ${req.file.filename} salvo com sucesso. ID: ${uploadId}`);
 
         // Inicia processamento da música em background
-        const pythonScript = path.join(__dirname, 'process_audio.py');
-        const pythonPath = path.join(__dirname, 'venv', 'bin', 'python3');
-        const command = `"${pythonPath}" "${pythonScript}" "${req.file.path}" ${uploadId}`;
+        const wrapperScript = path.join(__dirname, 'process_wrapper.sh');
+        const command = `"${wrapperScript}" "${req.file.path}" ${uploadId}`;
 
         exec(command, (error, stdout, stderr) => {
             if (error) {
                 logger.error(`Erro ao processar áudio: ${error.message}`);
+                logger.error(`stderr: ${stderr}`);
                 dbOperations.updateProcessingStatus(uploadId, 'error', null, () => {});
             } else {
                 logger.info(`Processamento iniciado para upload ID ${uploadId}`);
+                logger.info(`stdout: ${stdout}`);
             }
         });
 
