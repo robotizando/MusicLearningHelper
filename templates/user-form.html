@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{TITLE}} - M-Helper</title>
+
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/custom.css" rel="stylesheet">
+    <link href='http://fonts.googleapis.com/css?family=Nixie+One' rel='stylesheet' type='text/css'>
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,900" rel="stylesheet">
+</head>
+<body>
+    <div class="loader">
+        <div>
+            <img src="/images/icons/preloader.gif" />
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-5 left-wrapper">
+                <div class="event-banner-wrapper">
+                    <div class="logo">
+                        <a href="/">
+                            <h1>Estudio da Escola</h1>
+                        </a>
+                    </div>
+
+                    <h2>
+                        {{TITLE}}
+                        <span>Administração do Sistema</span>
+                    </h2>
+                </div>
+            </div>
+
+            <div class="col-sm-7 right-wrapper">
+                <div class="event-ticket-wrapper">
+                    <div class="event-tab">
+                        <ul class="nav nav-tabs" role="tablist">
+                            <li role="presentation"><a href="/">Home</a></li>
+                            <li role="presentation"><a href="/users">Usuários</a></li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <div role="tabpanel" class="active">
+                                <h3>{{TITLE}}</h3>
+
+                                <form method="POST" action="{{ACTION}}">
+                                    <div class="form-group">
+                                        <label for="username">Usuário *</label>
+                                        <input type="text" class="form-control" id="username" name="username"
+                                               value="{{USERNAME}}" {{USERNAME_READONLY}} required>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="full_name">Nome Completo *</label>
+                                        <input type="text" class="form-control" id="full_name" name="full_name"
+                                               value="{{FULL_NAME}}" required>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="email">Email *</label>
+                                        <input type="email" class="form-control" id="email" name="email"
+                                               value="{{EMAIL}}" required>
+                                    </div>
+
+                                    {{PASSWORD_FIELD}}
+
+                                    <div class="form-group">
+                                        <label>
+                                            <input type="checkbox" name="is_admin" value="1" {{IS_ADMIN_CHECKED}}>
+                                            Administrador
+                                        </label>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <button type="submit" class="btn btn-primary">Salvar</button>
+                                        <a href="/users" class="btn btn-default">Cancelar</a>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/allscript.js"></script>
+</body>
+</html>

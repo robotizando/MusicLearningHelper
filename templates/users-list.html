@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gerenciar Usuários - M-Helper</title>
+
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/custom.css" rel="stylesheet">
+    <link href='http://fonts.googleapis.com/css?family=Nixie+One' rel='stylesheet' type='text/css'>
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700,900" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+</head>
+<body>
+    <div class="loader">
+        <div>
+            <img src="/images/icons/preloader.gif" />
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-5 left-wrapper">
+                <div class="event-banner-wrapper">
+                    <div class="logo">
+                        <a href="/">
+                            <h1>Estudio da Escola</h1>
+                        </a>
+                    </div>
+
+                    <h2>
+                        Gerenciar Usuários
+                        <span>Administração do Sistema</span>
+                    </h2>
+                    <p>Usuário: {{USERNAME}}</p>
+                </div>
+            </div>
+
+            <div class="col-sm-7 right-wrapper">
+                <div class="event-ticket-wrapper">
+                    <div class="event-tab">
+                        <ul class="nav nav-tabs" role="tablist">
+                            <li role="presentation"><a href="/">Home</a></li>
+                            <li role="presentation"><a href="/my-uploads">Minhas Músicas</a></li>
+                            <li role="presentation" class="active"><a href="/users">Usuários</a></li>
+                            <li role="presentation"><a href="/logout">Sair</a></li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <div role="tabpanel" class="active" id="users">
+                                <h3>Lista de Usuários</h3>
+
+                                <div style="margin-bottom: 20px;">
+                                    <a href="/users/new" class="btn btn-success">
+                                        <i class="fa fa-plus"></i> Novo Usuário
+                                    </a>
+                                </div>
+
+                                <div class="row">
+                                    {{USERS}}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <script src="/js/bootstrap.min.js"></script>
+    <script src="/js/allscript.js"></script>
+</body>
+</html>

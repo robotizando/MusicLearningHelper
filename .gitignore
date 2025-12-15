@@ -144,3 +144,8 @@ venv/
 *.pyc
 __pycache__/
 pretrained_models/
+
+# Arquivos de dados e uploads
+data/*.db
+uploads/
+processed/

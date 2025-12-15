@@ -15,6 +15,24 @@ matplotlib.use('Agg')  # Use backend sem display
 import matplotlib.pyplot as plt
 import librosa
 import soundfile as sf
+from pydub import AudioSegment
+
+def convert_wav_to_mp3(wav_file, mp3_file, bitrate='192k'):
+    """Converte arquivo WAV para MP3"""
+    try:
+        print(f"Convertendo {os.path.basename(wav_file)} para MP3...")
+
+        # Carrega o arquivo WAV
+        audio = AudioSegment.from_wav(wav_file)
+
+        # Exporta como MP3
+        audio.export(mp3_file, format='mp3', bitrate=bitrate)
+
+        print(f"MP3 salvo em: {mp3_file}")
+        return True
+    except Exception as e:
+        print(f"Erro ao converter para MP3: {e}")
+        return False
 
 def generate_waveform(audio_file, output_image, color='#4CAF50'):
     """Gera imagem da forma de onda do áudio"""
@@ -129,8 +147,8 @@ def process_audio(audio_path, upload_id):
             # Remove a pasta vazia
             os.rmdir(spleeter_output)
 
-        # Gera waveforms para cada faixa
-        print("\nGerando waveforms...")
+        # Gera waveforms e converte para MP3
+        print("\nGerando waveforms e convertendo para MP3...")
         stems = ['vocals', 'drums', 'bass', 'other']
         colors = {
             'vocals': '#FF6B6B',    # Vermelho
@@ -140,10 +158,21 @@ def process_audio(audio_path, upload_id):
         }
 
         for stem in stems:
-            audio_file = os.path.join(output_dir, f'{stem}.wav')
-            if os.path.exists(audio_file):
+            wav_file = os.path.join(output_dir, f'{stem}.wav')
+            if os.path.exists(wav_file):
+                # Gera waveform
                 waveform_image = os.path.join(output_dir, f'{stem}.png')
-                generate_waveform(audio_file, waveform_image, colors[stem])
+                generate_waveform(wav_file, waveform_image, colors[stem])
+
+                # Converte para MP3
+                mp3_file = os.path.join(output_dir, f'{stem}.mp3')
+                if convert_wav_to_mp3(wav_file, mp3_file):
+                    # Remove o arquivo WAV após conversão bem-sucedida
+                    try:
+                        os.remove(wav_file)
+                        print(f"Arquivo WAV removido: {wav_file}")
+                    except Exception as e:
+                        print(f"Aviso: Não foi possível remover {wav_file}: {e}")
 
         # Caminho relativo para armazenar no banco
         processed_path = f'/processed/upload_{upload_id}'

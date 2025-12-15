@@ -21,6 +21,7 @@ Visualize acordes e letras de músicas
 - Faça upload de arquivos de áudio (MP3, WAV, OGG, MP4)
 - Processamento automático usando Spleeter do Deezer
 - Separação em 4 faixas: vocals, drums, bass, other
+- Conversão automática para MP3 (192kbps) para economia de espaço
 - Armazenamento em banco de dados SQLite
 
 ### 4. Meus Uploads
@@ -108,10 +109,14 @@ MusicLearningHelper/
 ├── uploads/                       # Arquivos de áudio enviados
 ├── processed/                     # Músicas processadas pelo Spleeter
 │   └── upload_{id}/              # Cada upload tem sua pasta
-│       ├── vocals.wav
-│       ├── drums.wav
-│       ├── bass.wav
-│       └── other.wav
+│       ├── vocals.mp3
+│       ├── drums.mp3
+│       ├── bass.mp3
+│       ├── other.mp3
+│       ├── vocals.png            # Waveforms
+│       ├── drums.png
+│       ├── bass.png
+│       └── other.png
 ├── templates/                     # Templates HTML
 │   ├── home.html
 │   ├── upload.html
@@ -164,7 +169,9 @@ MusicLearningHelper/
 ### Processamento de Áudio
 - **Spleeter (Deezer)**: Separação de faixas de áudio
 - **TensorFlow**: Machine learning para separação
-- **FFmpeg**: Processamento de áudio
+- **FFmpeg**: Processamento e conversão de áudio
+- **pydub**: Conversão de WAV para MP3
+- **librosa**: Geração de waveforms
 
 ### Frontend
 - **Bootstrap 3**: UI Framework

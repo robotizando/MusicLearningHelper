@@ -6,14 +6,33 @@ const util = require('util');
 const multer = require('multer');
 const { exec } = require('child_process');
 const { dbOperations } = require('./database');
-
+const session = require('express-session');
+const bcrypt = require('bcryptjs');
+const { requireAuth, requireAdmin, createDefaultAdmin } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;  // Lightsail define PORT automaticamente, localmente fica 3000
 
+// Configuração de sessão
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'music-helper-secret-key-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        maxAge: 24 * 60 * 60 * 1000 // 24 horas
+    }
+}));
+
 // Middleware para parsing de body
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// Criar usuário admin padrão ao iniciar
+createDefaultAdmin((err) => {
+    if (err) {
+        logger.error('Erro ao criar usuário admin padrão');
+    }
+});
 
 // Configuração do multer para upload de áudio
 const storage = multer.diskStorage({
@@ -51,43 +70,345 @@ const upload = multer({
 // Servir arquivos estáticos da pasta "public"
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ========== ROTAS DE AUTENTICAÇÃO ==========
 
-app.get('/', (req, res) => {
+// Rota de login (GET)
+app.get('/login', (req, res) => {
+    if (req.session && req.session.userId) {
+        return res.redirect('/');
+    }
+
+    const templatePath = path.join(__dirname, 'templates', 'login.html');
+    fs.readFile(templatePath, 'utf8', (err, html) => {
+        if (err) {
+            logger.error('Erro ao ler template de login: ' + err.message);
+            return res.status(500).send('Erro ao carregar página de login');
+        }
+        res.send(html.replace('{{ERROR_MESSAGE}}', ''));
+    });
+});
+
+// Rota de login (POST)
+app.post('/login', (req, res) => {
+    const { username, password } = req.body;
+
+    dbOperations.getUserByUsername(username, (err, user) => {
+        if (err || !user) {
+            logger.warn(`Tentativa de login falhou para usuário: ${username}`);
+            return sendLoginError(res, 'Usuário ou senha incorretos');
+        }
+
+        bcrypt.compare(password, user.password, (err, isMatch) => {
+            if (err || !isMatch) {
+                logger.warn(`Senha incorreta para usuário: ${username}`);
+                return sendLoginError(res, 'Usuário ou senha incorretos');
+            }
+
+            // Login bem-sucedido
+            req.session.userId = user.id;
+            req.session.username = user.username;
+            req.session.fullName = user.full_name;
+            req.session.isAdmin = user.is_admin === 1;
+
+            logger.info(`Usuário ${username} logou com sucesso`);
+            res.redirect('/');
+        });
+    });
+});
+
+function sendLoginError(res, message) {
+    const templatePath = path.join(__dirname, 'templates', 'login.html');
+    fs.readFile(templatePath, 'utf8', (err, html) => {
+        if (err) {
+            return res.status(500).send('Erro ao carregar página de login');
+        }
+        const errorHtml = `<div class="alert alert-danger error-message">${message}</div>`;
+        res.send(html.replace('{{ERROR_MESSAGE}}', errorHtml));
+    });
+}
+
+// Rota de logout
+app.get('/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            logger.error('Erro ao fazer logout: ' + err.message);
+        }
+        res.redirect('/login');
+    });
+});
+
+// ========== ROTAS PÚBLICAS (SEM AUTENTICAÇÃO) ==========
+
+app.get('/', requireAuth, (req, res) => {
     logger.info('Recebida requisição para /home.html');
     const templatePath = path.join(__dirname, 'templates', 'home.html');
     const termosPath = path.join(__dirname, 'templates', 'termos-uso.html');
 
-
     fs.readFile(termosPath, 'utf8', (err, termosHTML) => {
-
         if (err) {
             console.error('Erro ao ler template:', err);
             return res.status(500).send('Erro ao carregar o template');
         }
-    
 
         // Lê o template
         fs.readFile(templatePath, 'utf8', (err, templateHtml) => {
-            
             if (err) {
                 console.error('Erro ao ler template:', err);
                 return res.status(500).send('Erro ao carregar o template');
             }
 
-            // Substitui o marcador pelo HTML gerado
-            const finalHtml = templateHtml.replace('{{TERMOS}}', termosHTML);
+            // Adiciona menu de admin se usuário for admin
+            const adminMenu = req.session.isAdmin ?
+                '<li role="presentation"><a href="/users">Gerenciar Usuários</a></li>' : '';
+
+            // Substitui os marcadores
+            const finalHtml = templateHtml
+                .replace('{{TERMOS}}', termosHTML)
+                .replace('{{ADMIN_MENU}}', adminMenu)
+                .replace('{{USERNAME}}', req.session.username);
 
             res.send(finalHtml);
         });
-
     });
-
 });
 
+// ========== ROTAS DE GERENCIAMENTO DE USUÁRIOS (ADMIN) ==========
 
+// Listar usuários
+app.get('/users', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Recebida requisição para /users');
 
+    dbOperations.getAllUsers((err, users) => {
+        if (err) {
+            logger.error('Erro ao buscar usuários: ' + err.message);
+            return res.status(500).send('Erro ao buscar usuários');
+        }
 
-app.get('/multitrack-list', (req, res) => {
+        const templatePath = path.join(__dirname, 'templates', 'users-list.html');
+
+        const linhas = users.map(u => {
+            const adminBadge = u.is_admin ? '<span class="badge badge-warning">Admin</span>' : '';
+
+            return `
+                <div class="col-md-6" style="margin-bottom: 15px;">
+                    <div class="ticketBox">
+                        <div class="row">
+                            <div class="col-xs-7">
+                                <div class="ticket-name">
+                                    ${u.full_name} ${adminBadge}
+                                    <span>${u.username} - ${u.email}</span>
+                                </div>
+                                <small class="text-muted">Criado em ${new Date(u.created_at).toLocaleDateString('pt-BR')}</small>
+                            </div>
+                            <div class="col-xs-5 text-right">
+                                <div style="margin-top: 5px;">
+                                    <a href="/users/edit/${u.id}" class="btn btn-sm btn-warning" style="margin: 2px;">
+                                        <i class="fa fa-edit"></i> Editar
+                                    </a>
+                                    ${u.id !== req.session.userId ? `
+                                    <form action="/users/delete/${u.id}" method="POST" style="display: inline;"
+                                          onsubmit="return confirm('Tem certeza que deseja deletar este usuário?');">
+                                        <button type="submit" class="btn btn-sm btn-danger" style="margin: 2px;">
+                                            <i class="fa fa-trash"></i> Deletar
+                                        </button>
+                                    </form>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('\n');
+
+        fs.readFile(templatePath, 'utf8', (err, templateHtml) => {
+            if (err) {
+                logger.error('Erro ao ler template: ' + err.message);
+                return res.status(500).send('Erro ao carregar template');
+            }
+
+            const finalHtml = templateHtml
+                .replace('{{USERS}}', linhas)
+                .replace('{{USERNAME}}', req.session.username);
+            res.send(finalHtml);
+        });
+    });
+});
+
+// Formulário de novo usuário
+app.get('/users/new', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Recebida requisição para /users/new');
+    const templatePath = path.join(__dirname, 'templates', 'user-form.html');
+
+    fs.readFile(templatePath, 'utf8', (err, templateHtml) => {
+        if (err) {
+            logger.error('Erro ao ler template: ' + err.message);
+            return res.status(500).send('Erro ao carregar template');
+        }
+
+        const passwordField = `
+            <div class="form-group">
+                <label for="password">Senha *</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+        `;
+
+        const finalHtml = templateHtml
+            .replace('{{TITLE}}', 'Novo Usuário')
+            .replace('{{ACTION}}', '/users/create')
+            .replace('{{USERNAME}}', '')
+            .replace('{{USERNAME_READONLY}}', '')
+            .replace('{{FULL_NAME}}', '')
+            .replace('{{EMAIL}}', '')
+            .replace('{{PASSWORD_FIELD}}', passwordField)
+            .replace('{{IS_ADMIN_CHECKED}}', '');
+
+        res.send(finalHtml);
+    });
+});
+
+// Criar novo usuário
+app.post('/users/create', requireAuth, requireAdmin, (req, res) => {
+    const { username, password, full_name, email, is_admin } = req.body;
+
+    logger.info(`Criando novo usuário: ${username}`);
+
+    bcrypt.hash(password, 10, (err, hashedPassword) => {
+        if (err) {
+            logger.error('Erro ao criar hash da senha: ' + err.message);
+            return res.status(500).send('Erro ao criar usuário');
+        }
+
+        const userData = {
+            username,
+            password: hashedPassword,
+            full_name,
+            email,
+            is_admin: is_admin ? 1 : 0
+        };
+
+        dbOperations.insertUser(userData, (err, userId) => {
+            if (err) {
+                logger.error('Erro ao criar usuário: ' + err.message);
+                return res.status(500).send('Erro ao criar usuário');
+            }
+
+            logger.info(`Usuário ${username} criado com sucesso. ID: ${userId}`);
+            res.redirect('/users');
+        });
+    });
+});
+
+// Formulário de edição de usuário
+app.get('/users/edit/:userId', requireAuth, requireAdmin, (req, res) => {
+    const userId = req.params.userId;
+    logger.info(`Requisição para /users/edit/${userId}`);
+
+    dbOperations.getUserById(userId, (err, user) => {
+        if (err || !user) {
+            logger.error('Usuário não encontrado: ' + userId);
+            return res.status(404).send('Usuário não encontrado');
+        }
+
+        const templatePath = path.join(__dirname, 'templates', 'user-form.html');
+
+        fs.readFile(templatePath, 'utf8', (err, templateHtml) => {
+            if (err) {
+                logger.error('Erro ao ler template: ' + err.message);
+                return res.status(500).send('Erro ao carregar template');
+            }
+
+            const passwordField = `
+                <div class="form-group">
+                    <label for="password">Nova Senha (deixe em branco para manter a atual)</label>
+                    <input type="password" class="form-control" id="password" name="password">
+                </div>
+            `;
+
+            const finalHtml = templateHtml
+                .replace('{{TITLE}}', 'Editar Usuário')
+                .replace('{{ACTION}}', `/users/update/${user.id}`)
+                .replace('{{USERNAME}}', user.username)
+                .replace('{{USERNAME_READONLY}}', 'readonly')
+                .replace('{{FULL_NAME}}', user.full_name)
+                .replace('{{EMAIL}}', user.email)
+                .replace('{{PASSWORD_FIELD}}', passwordField)
+                .replace('{{IS_ADMIN_CHECKED}}', user.is_admin ? 'checked' : '');
+
+            res.send(finalHtml);
+        });
+    });
+});
+
+// Atualizar usuário
+app.post('/users/update/:userId', requireAuth, requireAdmin, (req, res) => {
+    const userId = req.params.userId;
+    const { full_name, email, is_admin, password } = req.body;
+
+    logger.info(`Atualizando usuário ${userId}`);
+
+    const userData = {
+        full_name,
+        email,
+        is_admin: is_admin ? 1 : 0
+    };
+
+    dbOperations.updateUser(userId, userData, (err) => {
+        if (err) {
+            logger.error('Erro ao atualizar usuário: ' + err.message);
+            return res.status(500).send('Erro ao atualizar usuário');
+        }
+
+        // Se senha foi fornecida, atualiza a senha
+        if (password && password.trim() !== '') {
+            bcrypt.hash(password, 10, (err, hashedPassword) => {
+                if (err) {
+                    logger.error('Erro ao criar hash da senha: ' + err.message);
+                    return res.status(500).send('Erro ao atualizar senha');
+                }
+
+                dbOperations.updateUserPassword(userId, hashedPassword, (err) => {
+                    if (err) {
+                        logger.error('Erro ao atualizar senha: ' + err.message);
+                        return res.status(500).send('Erro ao atualizar senha');
+                    }
+
+                    logger.info(`Usuário ${userId} e senha atualizados com sucesso`);
+                    res.redirect('/users');
+                });
+            });
+        } else {
+            logger.info(`Usuário ${userId} atualizado com sucesso`);
+            res.redirect('/users');
+        }
+    });
+});
+
+// Deletar usuário
+app.post('/users/delete/:userId', requireAuth, requireAdmin, (req, res) => {
+    const userId = req.params.userId;
+
+    // Não permite deletar a si mesmo
+    if (userId == req.session.userId) {
+        return res.status(400).send('Você não pode deletar sua própria conta');
+    }
+
+    logger.info(`Deletando usuário ${userId}`);
+
+    dbOperations.deleteUser(userId, (err) => {
+        if (err) {
+            logger.error('Erro ao deletar usuário: ' + err.message);
+            return res.status(500).send('Erro ao deletar usuário');
+        }
+
+        logger.info(`Usuário ${userId} deletado com sucesso`);
+        res.redirect('/users');
+    });
+});
+
+// ========== ROTAS DE MULTITRACKS E CIFRAS ==========
+
+app.get('/multitrack-list', requireAuth, (req, res) => {
     logger.info('Recebida requisição para /multitrack-list');
 
     const jsonPath = path.join(__dirname, 'data', 'multitrack-musicas.json');
@@ -144,7 +465,7 @@ app.get('/multitrack-list', (req, res) => {
 });
 
 
-app.get('/multitrack/:multitrackId', (req, res) => {
+app.get('/multitrack/:multitrackId', requireAuth, (req, res) => {
 
     const multitrackId = req.params.multitrackId;
     const jsonPath = path.join(__dirname, 'data', 'multitrack-musicas.json');
@@ -191,7 +512,7 @@ app.get('/multitrack/:multitrackId', (req, res) => {
 
 
 
-app.get('/cifras', (req, res) => {
+app.get('/cifras', requireAuth, (req, res) => {
     logger.info('Recebida requisição para /cifras');
 
     const jsonPath = path.join(__dirname, 'data', 'cifras.json');
@@ -247,7 +568,7 @@ app.get('/cifras', (req, res) => {
     });
 });
 
-app.get('/cifras/:cifraId', (req, res) => {
+app.get('/cifras/:cifraId', requireAuth, (req, res) => {
 
     const cifraId = req.params.cifraId;
     const jsonPath = path.join(__dirname, 'data', 'cifras.json');
@@ -294,7 +615,7 @@ app.get('/cifras/:cifraId', (req, res) => {
 });
 
 // Rota GET para exibir página de upload
-app.get('/upload', (req, res) => {
+app.get('/upload', requireAuth, (req, res) => {
     logger.info('Recebida requisição para /upload');
     const templatePath = path.join(__dirname, 'templates', 'upload.html');
 
@@ -309,7 +630,7 @@ app.get('/upload', (req, res) => {
 });
 
 // Rota POST para processar upload de áudio
-app.post('/upload', upload.single('audioFile'), (req, res) => {
+app.post('/upload', requireAuth, upload.single('audioFile'), (req, res) => {
     logger.info('Recebida requisição POST para /upload');
 
     if (!req.file) {
@@ -337,7 +658,8 @@ app.post('/upload', upload.single('audioFile'), (req, res) => {
         file_path: req.file.path,
         file_size: req.file.size,
         artist: req.body.artist || 'Desconhecido',
-        song_name: req.body.song_name || req.file.originalname.replace(/\.[^/.]+$/, '')
+        song_name: req.body.song_name || req.file.originalname.replace(/\.[^/.]+$/, ''),
+        user_id: req.session.userId
     };
 
     dbOperations.insertUpload(uploadData, (err, uploadId) => {
@@ -385,10 +707,10 @@ app.post('/upload', upload.single('audioFile'), (req, res) => {
 });
 
 // Rota para listar todos os uploads
-app.get('/my-uploads', (req, res) => {
+app.get('/my-uploads', requireAuth, (req, res) => {
     logger.info('Recebida requisição para /my-uploads');
 
-    dbOperations.getAllUploads((err, uploads) => {
+    dbOperations.getUploadsByUserId(req.session.userId, (err, uploads) => {
         if (err) {
             logger.error('Erro ao buscar uploads: ' + err.message);
             return res.status(500).send('Erro ao buscar uploads');
@@ -456,7 +778,7 @@ app.get('/my-uploads', (req, res) => {
 });
 
 // Rota para player de música processada
-app.get('/player/:uploadId', (req, res) => {
+app.get('/player/:uploadId', requireAuth, (req, res) => {
     const uploadId = req.params.uploadId;
     logger.info(`Requisição para /player/${uploadId}`);
 
@@ -464,6 +786,11 @@ app.get('/player/:uploadId', (req, res) => {
         if (err || !upload) {
             logger.error('Upload não encontrado: ' + uploadId);
             return res.status(404).send('Upload não encontrado');
+        }
+
+        // Verifica se o upload pertence ao usuário (ou se é admin)
+        if (upload.user_id !== req.session.userId && !req.session.isAdmin) {
+            return res.status(403).send('Você não tem permissão para acessar esta música');
         }
 
         if (upload.processing_status !== 'completed') {
@@ -492,7 +819,7 @@ app.get('/player/:uploadId', (req, res) => {
 });
 
 // Rota para editar música (GET)
-app.get('/edit/:uploadId', (req, res) => {
+app.get('/edit/:uploadId', requireAuth, (req, res) => {
     const uploadId = req.params.uploadId;
     logger.info(`Requisição para /edit/${uploadId}`);
 
@@ -500,6 +827,11 @@ app.get('/edit/:uploadId', (req, res) => {
         if (err || !upload) {
             logger.error('Upload não encontrado: ' + uploadId);
             return res.status(404).send('Upload não encontrado');
+        }
+
+        // Verifica se o upload pertence ao usuário (ou se é admin)
+        if (upload.user_id !== req.session.userId && !req.session.isAdmin) {
+            return res.status(403).send('Você não tem permissão para editar esta música');
         }
 
         const templatePath = path.join(__dirname, 'templates', 'edit-upload.html');
@@ -522,7 +854,7 @@ app.get('/edit/:uploadId', (req, res) => {
 });
 
 // Rota para atualizar música (POST)
-app.post('/update/:uploadId', (req, res) => {
+app.post('/update/:uploadId', requireAuth, (req, res) => {
     const uploadId = req.params.uploadId;
     const { song_name, artist } = req.body;
 
@@ -543,7 +875,7 @@ app.post('/update/:uploadId', (req, res) => {
 });
 
 // Rota para deletar música (POST)
-app.post('/delete/:uploadId', (req, res) => {
+app.post('/delete/:uploadId', requireAuth, (req, res) => {
     const uploadId = req.params.uploadId;
 
     logger.info(`Deletando upload ${uploadId}`);
@@ -551,6 +883,11 @@ app.post('/delete/:uploadId', (req, res) => {
     dbOperations.getUploadById(uploadId, (err, upload) => {
         if (err || !upload) {
             return res.status(404).send('Upload não encontrado');
+        }
+
+        // Verifica se o upload pertence ao usuário (ou se é admin)
+        if (upload.user_id !== req.session.userId && !req.session.isAdmin) {
+            return res.status(403).send('Você não tem permissão para deletar esta música');
         }
 
         // Deleta arquivos
