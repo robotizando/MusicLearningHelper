@@ -671,8 +671,9 @@ app.post('/upload', requireAuth, upload.single('audioFile'), (req, res) => {
         logger.info(`Arquivo ${req.file.filename} salvo com sucesso. ID: ${uploadId}`);
 
         // Inicia processamento da música em background
-        const wrapperScript = path.join(__dirname, 'process_wrapper.sh');
-        const command = `"${wrapperScript}" "${req.file.path}" ${uploadId}`;
+        const pythonScript = path.join(__dirname, 'process_audio.py');
+        const venvActivate = path.join(__dirname, 'venv', 'bin', 'activate');
+        const command = `bash -c "source '${venvActivate}' && python3 '${pythonScript}' '${req.file.path}' ${uploadId}"`;
 
         exec(command, (error, stdout, stderr) => {
             if (error) {
