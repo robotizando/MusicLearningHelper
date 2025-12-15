@@ -129,12 +129,30 @@ echo ""
 echo "3. Instalando dependências Python (isso pode demorar alguns minutos)..."
 echo "   Isso inclui: Spleeter, TensorFlow, Matplotlib, Librosa..."
 source venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Dependências Python instaladas${NC}"
-    echo "   Verificando compatibilidade numpy/tensorflow..."
-    pip install "numpy<2.0" --force-reinstall -q
-    echo -e "${GREEN}✓ NumPy ajustado para compatibilidade${NC}"
+
+    # Verifica se o TensorFlow foi instalado corretamente
+    echo "   Verificando instalação do TensorFlow..."
+    python3 -c "import tensorflow; print('TensorFlow version:', tensorflow.__version__)" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ TensorFlow instalado corretamente${NC}"
+    else
+        echo -e "${YELLOW}⚠ TensorFlow não foi detectado, tentando reinstalar...${NC}"
+        pip install --upgrade tensorflow==2.12.0
+    fi
+
+    # Verifica se o Spleeter foi instalado corretamente
+    echo "   Verificando instalação do Spleeter..."
+    python3 -c "from spleeter.separator import Separator; print('Spleeter OK')" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Spleeter instalado corretamente${NC}"
+    else
+        echo -e "${RED}✗ Erro: Spleeter não pôde ser carregado${NC}"
+        echo "   Execute 'source venv/bin/activate && python3 verify_spleeter.py' para mais detalhes"
+    fi
 else
     echo -e "${RED}✗ Erro ao instalar dependências Python${NC}"
     exit 1
