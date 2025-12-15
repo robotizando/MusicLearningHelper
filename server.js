@@ -920,6 +920,61 @@ app.post('/delete/:uploadId', requireAuth, (req, res) => {
     });
 });
 
+// Rota de diagnóstico para verificar instalação do Spleeter
+app.get('/diagnostic', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Executando diagnóstico do Spleeter');
+
+    const verifyScript = path.join(__dirname, 'verify_spleeter.py');
+    const venvActivate = path.join(__dirname, 'venv', 'bin', 'activate');
+    const command = `bash -c "source '${venvActivate}' && python3 '${verifyScript}'"`;
+
+    exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
+        const html = `
+            <html>
+                <head>
+                    <title>Diagnóstico Spleeter</title>
+                    <link href="/css/bootstrap.min.css" rel="stylesheet">
+                    <style>
+                        pre {
+                            background: #f5f5f5;
+                            padding: 15px;
+                            border-radius: 5px;
+                            overflow-x: auto;
+                        }
+                        .error { color: red; }
+                        .success { color: green; }
+                    </style>
+                </head>
+                <body class="container mt-5">
+                    <h1>Diagnóstico de Instalação do Spleeter</h1>
+                    <hr>
+
+                    <h3>Comando executado:</h3>
+                    <pre>${command}</pre>
+
+                    ${error ? `
+                        <h3 class="error">❌ Erro:</h3>
+                        <pre class="error">${error.message}</pre>
+                    ` : '<h3 class="success">✓ Comando executado sem erros</h3>'}
+
+                    <h3>Saída (stdout):</h3>
+                    <pre>${stdout || 'Nenhuma saída'}</pre>
+
+                    ${stderr ? `
+                        <h3>Erros/Avisos (stderr):</h3>
+                        <pre>${stderr}</pre>
+                    ` : ''}
+
+                    <hr>
+                    <a href="/" class="btn btn-primary">Voltar para Home</a>
+                </body>
+            </html>
+        `;
+
+        res.send(html);
+    });
+});
+
 // Servir arquivos processados
 app.use('/processed', express.static(path.join(__dirname, 'processed')));
 
