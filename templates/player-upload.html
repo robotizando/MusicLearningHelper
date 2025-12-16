@@ -7,6 +7,7 @@
     <script src="https://cdn.rawgit.com/download/polymer-cdn/1.5.0/lib/webcomponentsjs/webcomponents-lite.min.js"></script>
     <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
     <link rel="stylesheet" href="/css/trackswitch.css" />
+    <link rel="stylesheet" href="/css/chords-display.css" />
     <style media="screen">
         body {
             font-family: sans-serif;
@@ -77,9 +78,13 @@
     </ts-track>
 </div>
 
+<!-- Componente de Acordes -->
+<div id="chords-display-container" style="max-width: 800px; margin: 20px auto;"></div>
+
 
 <script src="/js/jquery-3.2.1.min.js.js"></script>
 <script src="/js/trackswitch.js"></script>
+<script src="/js/chords-display.js"></script>
 
 <script type="text/javascript">
     jQuery(document).ready(function() {
@@ -97,16 +102,34 @@
             // Esconde todas as waveforms primeiro
             jQuery('.waveform-layer').hide();
 
-            // Mostra waveforms apenas das faixas ativas
-            jQuery('ts-track').each(function() {
-                const $track = jQuery(this);
-                const stem = $track.attr('data-stem');
-                const isActive = !$track.hasClass('muted');
+            // Verifica se alguma faixa está em modo solo
+            var $soloTracks = jQuery('.track .solo.checked');
+            var hasSolo = $soloTracks.length > 0;
 
-                if (isActive && stem) {
-                    jQuery(`#waveform-${stem}`).show();
-                }
-            });
+            if (hasSolo) {
+                // Se há faixas em solo, mostra apenas as waveforms das faixas em solo
+                $soloTracks.each(function() {
+                    const trackIndex = jQuery(this).closest('.track').prevAll().length;
+                    const $track = jQuery('ts-track').eq(trackIndex);
+                    const stem = $track.attr('data-stem');
+
+                    if (stem) {
+                        jQuery(`#waveform-${stem}`).show();
+                    }
+                });
+            } else {
+                // Se não há faixas em solo, mostra waveforms de todas as faixas não-mutadas
+                jQuery('ts-track').each(function(index) {
+                    const $track = jQuery(this);
+                    const stem = $track.attr('data-stem');
+                    const $trackControl = jQuery('.track').eq(index);
+                    const isMuted = $trackControl.find('.mute.checked').length > 0;
+
+                    if (!isMuted && stem) {
+                        jQuery(`#waveform-${stem}`).show();
+                    }
+                });
+            }
         }
 
         // Função para atualizar a posição do cursor
@@ -195,7 +218,11 @@
             });
         });
 
-        // Também monitora cliques diretos
+        // Também monitora cliques diretos nos botões solo e mute
+        jQuery(document).on('click', '.solo, .mute', function() {
+            setTimeout(updateWaveforms, 50);
+        });
+
         jQuery(document).on('click', 'ts-track, .track-control', function() {
             setTimeout(updateWaveforms, 100);
         });
@@ -205,6 +232,75 @@
             updateWaveforms();
             updateCursorPosition();
         }, 500);
+
+        // Inicializa componente de acordes
+        var chordsDisplayInstance = null;
+        var $chordsContainer = jQuery('#chords-display-container');
+
+        // Função para conectar o display ao player
+        function connectChordsToPlayer() {
+            chordsDisplayInstance = $chordsContainer.data('chordsDisplayManager');
+
+            if (!chordsDisplayInstance) {
+                console.warn('ChordsDisplayManager ainda não foi criado');
+                return false;
+            }
+
+            if (!player) {
+                console.warn('Player ainda não está disponível');
+                return false;
+            }
+
+            // Verifica se o player está inicializado
+            if (typeof player.position === 'undefined') {
+                console.warn('Player ainda não está totalmente inicializado');
+                return false;
+            }
+
+            chordsDisplayInstance.connectToPlayer(player);
+            console.log('✓ Display de acordes conectado ao player com sucesso!');
+            return true;
+        }
+
+        // Aguarda o player estar pronto antes de inicializar acordes
+        setTimeout(function() {
+            console.log('Inicializando componente de acordes...');
+
+            // Cria o display de acordes usando o plugin
+            $chordsContainer.chordsDisplay({
+                uploadId: {{ID}},
+                apiEndpoint: '/api/chords',
+                updateInterval: 100,
+                autoCollapse: false,
+                showTimeline: true,
+                showConfidence: true,
+                onLoad: function(data) {
+                    console.log('Acordes carregados:', data.events.length, 'eventos');
+
+                    // Tenta conectar ao player
+                    var attempts = 0;
+                    var maxAttempts = 20;
+                    var connectInterval = setInterval(function() {
+                        attempts++;
+
+                        if (connectChordsToPlayer()) {
+                            clearInterval(connectInterval);
+                        } else if (attempts >= maxAttempts) {
+                            console.error('Falha ao conectar acordes ao player após', maxAttempts, 'tentativas');
+                            clearInterval(connectInterval);
+                        } else {
+                            console.log('Tentativa', attempts, 'de conectar acordes ao player...');
+                        }
+                    }, 200);
+                },
+                onChordChange: function(chord) {
+                    console.log('♫ Acorde atual:', chord.chord, '(' + (chord.confidence * 100).toFixed(0) + '%)');
+                },
+                onError: function(error) {
+                    console.warn('Erro ao carregar acordes:', error);
+                }
+            });
+        }, 1500);
 
         // Autoplay se solicitado
         if (autoplay) {

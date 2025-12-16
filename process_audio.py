@@ -157,6 +157,7 @@ def process_audio(audio_path, upload_id):
             'other': '#6C5CE7'      # Roxo
         }
 
+        stems_paths = {}
         for stem in stems:
             wav_file = os.path.join(output_dir, f'{stem}.wav')
             if os.path.exists(wav_file):
@@ -167,12 +168,29 @@ def process_audio(audio_path, upload_id):
                 # Converte para MP3
                 mp3_file = os.path.join(output_dir, f'{stem}.mp3')
                 if convert_wav_to_mp3(wav_file, mp3_file):
+                    stems_paths[stem] = mp3_file
                     # Remove o arquivo WAV após conversão bem-sucedida
                     try:
                         os.remove(wav_file)
                         print(f"Arquivo WAV removido: {wav_file}")
                     except Exception as e:
                         print(f"Aviso: Não foi possível remover {wav_file}: {e}")
+
+        # Análise de acordes
+        print("\nAnalisando acordes...")
+        try:
+            from chord_analyzer import ChordAnalyzer
+            analyzer = ChordAnalyzer(hop_length=512, frame_size=2048)
+            chord_data = analyzer.analyze_stems(stems_paths)
+
+            # Salva dados de acordes
+            chords_file = os.path.join(output_dir, 'chords.json')
+            analyzer.save_to_json(chord_data, chords_file)
+            print(f"Acordes salvos em: {chords_file}")
+            print(f"Total de eventos detectados: {len(chord_data.get('events', []))}")
+        except Exception as e:
+            print(f"Aviso: Não foi possível analisar acordes: {e}")
+            # Não falha o processamento se análise de acordes falhar
 
         # Caminho relativo para armazenar no banco
         processed_path = f'/processed/upload_{upload_id}'
