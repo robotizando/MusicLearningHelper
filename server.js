@@ -70,6 +70,9 @@ const upload = multer({
 // Servir arquivos estáticos da pasta "public"
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Servir node_modules para bibliotecas client-side
+app.use('/node_modules', express.static(path.join(__dirname, 'node_modules')));
+
 // ========== ROTAS DE AUTENTICAÇÃO ==========
 
 // Rota de login (GET)
@@ -144,31 +147,103 @@ app.get('/', requireAuth, (req, res) => {
     const templatePath = path.join(__dirname, 'templates', 'home.html');
     const termosPath = path.join(__dirname, 'templates', 'termos-uso.html');
 
-    fs.readFile(termosPath, 'utf8', (err, termosHTML) => {
+    // Se for admin, busca todas as músicas com informações do usuário
+    // Se não for admin, busca apenas as músicas do usuário logado
+    const getUploadsFunction = req.session.isAdmin
+        ? (callback) => dbOperations.getAllUploadsWithUserInfo(callback)
+        : (callback) => dbOperations.getUploadsByUserId(req.session.userId, callback);
+
+    getUploadsFunction((err, uploads) => {
         if (err) {
-            console.error('Erro ao ler template:', err);
-            return res.status(500).send('Erro ao carregar o template');
+            logger.error('Erro ao buscar uploads: ' + err.message);
+            return res.status(500).send('Erro ao buscar uploads');
         }
 
-        // Lê o template
-        fs.readFile(templatePath, 'utf8', (err, templateHtml) => {
+        fs.readFile(termosPath, 'utf8', (err, termosHTML) => {
             if (err) {
                 console.error('Erro ao ler template:', err);
                 return res.status(500).send('Erro ao carregar o template');
             }
 
-            // Adiciona menu de admin se usuário for admin
-            const adminMenu = req.session.isAdmin ?
-                `<li role="presentation"><a href="/users">Gerenciar Usuários</a></li>
-                 <li role="presentation"><a href="/diagnostic">Diagnóstico Sistema</a></li>` : '';
+            // Lê o template
+            fs.readFile(templatePath, 'utf8', (err, templateHtml) => {
+                if (err) {
+                    console.error('Erro ao ler template:', err);
+                    return res.status(500).send('Erro ao carregar o template');
+                }
 
-            // Substitui os marcadores
-            const finalHtml = templateHtml
-                .replace('{{TERMOS}}', termosHTML)
-                .replace('{{ADMIN_MENU}}', adminMenu)
-                .replace('{{USERNAME}}', req.session.username);
+                // Gera HTML das músicas
+                const musicList = uploads.map(u => {
+                    const statusBadge = u.processing_status === 'completed' ? 'success' :
+                                       u.processing_status === 'processing' ? 'warning' :
+                                       u.processing_status === 'error' ? 'danger' : 'secondary';
 
-            res.send(finalHtml);
+                    const statusText = u.processing_status === 'completed' ? 'Processado' :
+                                      u.processing_status === 'processing' ? 'Processando' :
+                                      u.processing_status === 'error' ? 'Erro' : 'Pendente';
+
+                    const playLink = u.processing_status === 'completed' ?
+                        `<a href="/player/${u.id}?autoplay=true" class="btn btn-sm btn-success" style="margin: 2px;">
+                            <i class="fa fa-play"></i> Tocar
+                        </a>` :
+                        '';
+
+                    // Mostra o nome do usuário apenas se for admin
+                    const userBadge = req.session.isAdmin && u.full_name ?
+                        `<br><small class="text-info"><i class="fa fa-user"></i> ${u.full_name}</small>` : '';
+
+                    // Botões de editar e deletar para admin
+                    const adminButtons = req.session.isAdmin ? `
+                        <a href="/edit/${u.id}" class="btn btn-sm btn-warning" style="margin: 2px;">
+                            <i class="fa fa-edit"></i> Editar
+                        </a>
+                        <form action="/delete/${u.id}" method="POST" style="display: inline;"
+                              onsubmit="return confirm('Tem certeza que deseja deletar esta música?');">
+                            <button type="submit" class="btn btn-sm btn-danger" style="margin: 2px;">
+                                <i class="fa fa-trash"></i> Deletar
+                            </button>
+                        </form>
+                    ` : '';
+
+                    return `
+                        <div class="col-md-6" style="margin-bottom: 15px;">
+                            <div class="ticketBox">
+                                <div class="row">
+                                    <div class="col-xs-7">
+                                        <div class="ticket-name">
+                                            ${u.song_name}<span>${u.artist}</span>
+                                        </div>
+                                        <small class="text-muted">${new Date(u.upload_date).toLocaleDateString('pt-BR')}</small>
+                                        ${userBadge}
+                                    </div>
+                                    <div class="col-xs-5 text-right">
+                                        <span class="badge badge-${statusBadge}">${statusText}</span>
+                                        <br>
+                                        <div style="margin-top: 5px;">
+                                            ${playLink}
+                                            ${adminButtons}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('\n');
+
+                // Adiciona menu de admin se usuário for admin
+                const adminMenu = req.session.isAdmin ?
+                    `<li role="presentation"><a href="/users">Gerenciar Usuários</a></li>
+                     <li role="presentation"><a href="/diagnostic">Diagnóstico Sistema</a></li>` : '';
+
+                // Substitui os marcadores
+                const finalHtml = templateHtml
+                    .replace('{{TERMOS}}', termosHTML)
+                    .replace('{{ADMIN_MENU}}', adminMenu)
+                    .replace('{{USERNAME}}', req.session.username)
+                    .replace('{{UPLOADS}}', musicList);
+
+                res.send(finalHtml);
+            });
         });
     });
 });
@@ -863,17 +938,36 @@ app.post('/update/:uploadId', requireAuth, (req, res) => {
 
     logger.info(`Atualizando upload ${uploadId}: ${song_name} - ${artist}`);
 
-    const sql = `UPDATE uploads SET song_name = ?, artist = ? WHERE id = ?`;
-
-    const db = require('./database').db;
-    db.run(sql, [song_name, artist, uploadId], function(err) {
-        if (err) {
-            logger.error('Erro ao atualizar: ' + err.message);
-            return res.status(500).send('Erro ao atualizar');
+    // Busca informações do upload para verificar dono
+    dbOperations.getUploadById(uploadId, (err, upload) => {
+        if (err || !upload) {
+            return res.status(404).send('Upload não encontrado');
         }
 
-        logger.info(`Upload ${uploadId} atualizado com sucesso`);
-        res.redirect('/my-uploads');
+        // Verifica permissão (dono ou admin)
+        if (upload.user_id !== req.session.userId && !req.session.isAdmin) {
+            return res.status(403).send('Você não tem permissão para editar esta música');
+        }
+
+        const sql = `UPDATE uploads SET song_name = ?, artist = ? WHERE id = ?`;
+
+        const db = require('./database').db;
+        db.run(sql, [song_name, artist, uploadId], function(err) {
+            if (err) {
+                logger.error('Erro ao atualizar: ' + err.message);
+                return res.status(500).send('Erro ao atualizar');
+            }
+
+            logger.info(`Upload ${uploadId} atualizado com sucesso`);
+
+            // Se for admin e a música não era dele, redireciona para home
+            // Caso contrário, redireciona para my-uploads
+            if (req.session.isAdmin && upload.user_id !== req.session.userId) {
+                res.redirect('/');
+            } else {
+                res.redirect('/my-uploads');
+            }
+        });
     });
 });
 
@@ -916,7 +1010,14 @@ app.post('/delete/:uploadId', requireAuth, (req, res) => {
             }
 
             logger.info(`Upload ${uploadId} deletado com sucesso`);
-            res.redirect('/my-uploads');
+
+            // Se for admin e a música não era dele, redireciona para home
+            // Caso contrário, redireciona para my-uploads
+            if (req.session.isAdmin && upload.user_id !== req.session.userId) {
+                res.redirect('/');
+            } else {
+                res.redirect('/my-uploads');
+            }
         });
     });
 });

@@ -180,6 +180,20 @@ const dbOperations = {
         db.all(sql, [userId], callback);
     },
 
+    // Listar todos os uploads com informações do usuário (para admin)
+    getAllUploadsWithUserInfo: (callback) => {
+        const sql = `
+            SELECT
+                uploads.*,
+                users.username,
+                users.full_name
+            FROM uploads
+            LEFT JOIN users ON uploads.user_id = users.id
+            ORDER BY upload_date DESC
+        `;
+        db.all(sql, [], callback);
+    },
+
     // Buscar upload por ID
     getUploadById: (id, callback) => {
         const sql = `SELECT * FROM uploads WHERE id = ?`;
