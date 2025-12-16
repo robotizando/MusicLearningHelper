@@ -16,6 +16,10 @@ import matplotlib.pyplot as plt
 import librosa
 import soundfile as sf
 from pydub import AudioSegment
+from dotenv import load_dotenv
+
+# Carrega variáveis de ambiente
+load_dotenv()
 
 def convert_wav_to_mp3(wav_file, mp3_file, bitrate='192k'):
     """Converte arquivo WAV para MP3"""
@@ -72,9 +76,29 @@ def generate_waveform(audio_file, output_image, color='#4CAF50'):
         print(f"Erro ao gerar waveform: {e}")
         return False
 
+def get_db_path():
+    """Obtém o caminho do banco de dados a partir das variáveis de ambiente"""
+    db_path = os.getenv('DB_PATH', './data/database/uploads.db')
+
+    # Se for caminho relativo, resolve a partir do diretório do script
+    if not os.path.isabs(db_path):
+        db_path = os.path.join(os.path.dirname(__file__), db_path)
+
+    return db_path
+
+def get_data_dir():
+    """Obtém o diretório base de dados a partir das variáveis de ambiente"""
+    data_dir = os.getenv('DATA_DIR', './data')
+
+    # Se for caminho relativo, resolve a partir do diretório do script
+    if not os.path.isabs(data_dir):
+        data_dir = os.path.join(os.path.dirname(__file__), data_dir)
+
+    return data_dir
+
 def update_db_status(upload_id, status, processed_path=None):
     """Atualiza o status do processamento no banco de dados"""
-    db_path = os.path.join(os.path.dirname(__file__), 'data', 'uploads.db')
+    db_path = get_db_path()
 
     try:
         conn = sqlite3.connect(db_path)
@@ -103,6 +127,19 @@ def process_audio(audio_path, upload_id):
         print(f"Iniciando processamento do arquivo: {audio_path}")
         print(f"Upload ID: {upload_id}")
 
+        # Log de configuração de caminhos (importante para diagnóstico)
+        print("=" * 70)
+        print("CONFIGURAÇÃO DE DIRETÓRIOS (Python)")
+        print("=" * 70)
+        print(f"Script __file__: {__file__}")
+        print(f"Script dir: {os.path.dirname(__file__)}")
+        print(f"DATA_DIR (env): {os.getenv('DATA_DIR', 'não definida')}")
+        data_dir = get_data_dir()
+        print(f"DATA_DIR (resolvido): {data_dir}")
+        print(f"DB_PATH (env): {os.getenv('DB_PATH', 'não definida')}")
+        print(f"DB_PATH (resolvido): {get_db_path()}")
+        print("=" * 70)
+
         # Atualiza status para "processing"
         update_db_status(upload_id, 'processing')
 
@@ -116,11 +153,11 @@ def process_audio(audio_path, upload_id):
             return False
 
         # Cria diretório de saída
-        base_dir = os.path.dirname(__file__)
-        output_dir = os.path.join(base_dir, 'processed', f'upload_{upload_id}')
+        output_dir = os.path.join(data_dir, 'processed', f'upload_{upload_id}')
         os.makedirs(output_dir, exist_ok=True)
 
         print(f"Diretório de saída: {output_dir}")
+        print(f"Diretório de saída existe? {os.path.exists(output_dir)}")
 
         # Configura o Spleeter para 4 stems (vocals, drums, bass, other)
         separator = Separator('spleeter:4stems')

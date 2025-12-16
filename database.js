@@ -1,6 +1,7 @@
 require('dotenv').config();
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 const logger = require('./logger');
 
 // Configura caminho do banco de dados a partir da variável de ambiente
@@ -9,7 +10,14 @@ const dbPath = process.env.DB_PATH
     ? (path.isAbsolute(process.env.DB_PATH)
         ? process.env.DB_PATH
         : path.join(__dirname, process.env.DB_PATH))
-    : path.join(__dirname, 'data', 'uploads.db');
+    : path.join(__dirname, 'data', 'database', 'uploads.db');
+
+// Garante que o diretório do banco de dados existe
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+    logger.info('Diretório do banco de dados criado: ' + dbDir);
+}
 
 // Cria conexão com o banco de dados
 const db = new sqlite3.Database(dbPath, (err) => {

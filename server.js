@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -12,6 +13,35 @@ const { requireAuth, requireAdmin, createDefaultAdmin } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;  // Lightsail define PORT automaticamente, localmente fica 3000
+
+// Configuração de diretórios de dados
+const DATA_DIR = process.env.DATA_DIR
+    ? (path.isAbsolute(process.env.DATA_DIR)
+        ? process.env.DATA_DIR
+        : path.join(__dirname, process.env.DATA_DIR))
+    : path.join(__dirname, 'data');
+
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+const PROCESSED_DIR = path.join(DATA_DIR, 'processed');
+
+// Log de configuração de caminhos (importante para diagnóstico)
+logger.info('========== CONFIGURAÇÃO DE DIRETÓRIOS ==========');
+logger.info('__dirname: ' + __dirname);
+logger.info('DATA_DIR (env): ' + (process.env.DATA_DIR || 'não definida'));
+logger.info('DATA_DIR (resolvido): ' + DATA_DIR);
+logger.info('UPLOADS_DIR: ' + UPLOADS_DIR);
+logger.info('PROCESSED_DIR: ' + PROCESSED_DIR);
+logger.info('================================================');
+
+// Garante que os diretórios existem
+[DATA_DIR, UPLOADS_DIR, PROCESSED_DIR].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        logger.info('Diretório criado: ' + dir);
+    } else {
+        logger.info('Diretório já existe: ' + dir);
+    }
+});
 
 // Configuração de sessão
 app.use(session({
@@ -37,12 +67,7 @@ createDefaultAdmin((err) => {
 // Configuração do multer para upload de áudio
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const uploadDir = path.join(__dirname, 'uploads');
-        // Garante que a pasta existe
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
+        cb(null, UPLOADS_DIR);
     },
     filename: function (req, file, cb) {
         // Gera nome único: timestamp + nome original
@@ -234,6 +259,7 @@ app.get('/', requireAuth, (req, res) => {
                 const adminMenu = req.session.isAdmin ?
                     `<li role="presentation"><a href="/users">Gerenciar Usuários</a></li>
                      <li role="presentation"><a href="/database">Banco de Dados</a></li>
+                     <li role="presentation"><a href="/file-manager">Gerenciador de Arquivos</a></li>
                      <li role="presentation"><a href="/diagnostic">Diagnóstico Sistema</a></li>` : '';
 
                 // Substitui os marcadores
@@ -994,7 +1020,7 @@ app.post('/delete/:uploadId', requireAuth, (req, res) => {
                 fs.unlinkSync(upload.file_path);
             }
             if (upload.processed_path) {
-                const processedDir = path.join(__dirname, upload.processed_path.replace(/^\//, ''));
+                const processedDir = path.join(PROCESSED_DIR, `upload_${uploadId}`);
                 if (fs.existsSync(processedDir)) {
                     fs.rmSync(processedDir, { recursive: true, force: true });
                 }
@@ -1023,8 +1049,82 @@ app.post('/delete/:uploadId', requireAuth, (req, res) => {
     });
 });
 
-// Rota de diagnóstico para verificar instalação do Spleeter
+// ========== ROTAS DE DIAGNÓSTICO (ADMIN) ==========
+
+// Página principal de diagnóstico
 app.get('/diagnostic', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Acesso à página de diagnóstico');
+    const templatePath = path.join(__dirname, 'templates', 'diagnostic-dashboard.html');
+
+    fs.readFile(templatePath, 'utf8', (err, html) => {
+        if (err) {
+            logger.error('Erro ao ler template de diagnóstico: ' + err.message);
+            return res.status(500).send('Erro ao carregar página de diagnóstico');
+        }
+        res.send(html);
+    });
+});
+
+// API: Diagnóstico de variáveis de ambiente (Node.js)
+app.get('/api/diagnostic/env-node', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Executando diagnóstico de variáveis de ambiente (Node.js)');
+
+    const diagnostics = [
+        { label: '__dirname', value: __dirname },
+        { label: 'DATA_DIR (env)', value: process.env.DATA_DIR || 'não definida' },
+        { label: 'DATA_DIR (resolvido)', value: DATA_DIR },
+        { label: 'UPLOADS_DIR', value: UPLOADS_DIR },
+        { label: 'PROCESSED_DIR', value: PROCESSED_DIR },
+        { label: 'DB_PATH (env)', value: process.env.DB_PATH || 'não definida' },
+        { label: 'PORT', value: process.env.PORT || '3000 (padrão)' },
+        { label: 'Diretório .env existe?', value: fs.existsSync(path.join(__dirname, '.env')) ? 'SIM' : 'NÃO' }
+    ];
+
+    // Verifica se diretórios existem
+    diagnostics.push({ label: 'DATA_DIR existe?', value: fs.existsSync(DATA_DIR) ? 'SIM' : 'NÃO' });
+    diagnostics.push({ label: 'UPLOADS_DIR existe?', value: fs.existsSync(UPLOADS_DIR) ? 'SIM' : 'NÃO' });
+    diagnostics.push({ label: 'PROCESSED_DIR existe?', value: fs.existsSync(PROCESSED_DIR) ? 'SIM' : 'NÃO' });
+
+    // Conta arquivos
+    if (fs.existsSync(UPLOADS_DIR)) {
+        const uploads = fs.readdirSync(UPLOADS_DIR);
+        diagnostics.push({ label: 'Arquivos em UPLOADS_DIR', value: uploads.length });
+    }
+
+    if (fs.existsSync(PROCESSED_DIR)) {
+        const processed = fs.readdirSync(PROCESSED_DIR);
+        diagnostics.push({ label: 'Pastas em PROCESSED_DIR', value: processed.length });
+    }
+
+    res.json({
+        success: true,
+        title: 'Diagnóstico de Variáveis de Ambiente (Node.js)',
+        diagnostics: diagnostics
+    });
+});
+
+// API: Diagnóstico de variáveis de ambiente (Python)
+app.get('/api/diagnostic/env-python', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Executando diagnóstico de variáveis de ambiente (Python)');
+
+    const checkScript = path.join(__dirname, 'check-env.py');
+    const venvActivate = path.join(__dirname, 'venv', 'bin', 'activate');
+    const command = `bash -c "source '${venvActivate}' && python3 '${checkScript}'"`;
+
+    exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
+        res.json({
+            success: !error,
+            title: error ? 'Erro ao executar diagnóstico Python' : 'Diagnóstico Python executado com sucesso',
+            command: command,
+            output: stdout,
+            stderr: stderr,
+            error: error ? error.message : null
+        });
+    });
+});
+
+// API: Diagnóstico do Spleeter
+app.get('/api/diagnostic/spleeter', requireAuth, requireAdmin, (req, res) => {
     logger.info('Executando diagnóstico do Spleeter');
 
     const verifyScript = path.join(__dirname, 'verify_spleeter.py');
@@ -1032,50 +1132,150 @@ app.get('/diagnostic', requireAuth, requireAdmin, (req, res) => {
     const command = `bash -c "source '${venvActivate}' && python3 '${verifyScript}'"`;
 
     exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
-        const html = `
-            <html>
-                <head>
-                    <title>Diagnóstico Spleeter</title>
-                    <link href="/css/bootstrap.min.css" rel="stylesheet">
-                    <style>
-                        pre {
-                            background: #f5f5f5;
-                            padding: 15px;
-                            border-radius: 5px;
-                            overflow-x: auto;
-                        }
-                        .error { color: red; }
-                        .success { color: green; }
-                    </style>
-                </head>
-                <body class="container mt-5">
-                    <h1>Diagnóstico de Instalação do Spleeter</h1>
-                    <hr>
-
-                    <h3>Comando executado:</h3>
-                    <pre>${command}</pre>
-
-                    ${error ? `
-                        <h3 class="error">❌ Erro:</h3>
-                        <pre class="error">${error.message}</pre>
-                    ` : '<h3 class="success">✓ Comando executado sem erros</h3>'}
-
-                    <h3>Saída (stdout):</h3>
-                    <pre>${stdout || 'Nenhuma saída'}</pre>
-
-                    ${stderr ? `
-                        <h3>Erros/Avisos (stderr):</h3>
-                        <pre>${stderr}</pre>
-                    ` : ''}
-
-                    <hr>
-                    <a href="/" class="btn btn-primary">Voltar para Home</a>
-                </body>
-            </html>
-        `;
-
-        res.send(html);
+        res.json({
+            success: !error,
+            title: error ? 'Erro na verificação do Spleeter' : 'Spleeter verificado com sucesso',
+            command: command,
+            output: stdout,
+            stderr: stderr,
+            error: error ? error.message : null
+        });
     });
+});
+
+// API: Diagnóstico de caminhos e arquivos
+app.get('/api/diagnostic/paths', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Executando diagnóstico de caminhos');
+
+    const diagnostics = [];
+
+    // Verifica pastas locais indesejadas
+    const localUploads = path.join(__dirname, 'uploads');
+    const localProcessed = path.join(__dirname, 'processed');
+
+    if (fs.existsSync(localUploads)) {
+        const files = fs.readdirSync(localUploads);
+        diagnostics.push({
+            label: '⚠️ AVISO: Pasta ./uploads/ encontrada',
+            value: `${files.length} arquivo(s) - Caminho: ${localUploads}`
+        });
+    } else {
+        diagnostics.push({
+            label: '✓ Pasta ./uploads/ local',
+            value: 'Não existe (OK)'
+        });
+    }
+
+    if (fs.existsSync(localProcessed)) {
+        const files = fs.readdirSync(localProcessed);
+        diagnostics.push({
+            label: '⚠️ AVISO: Pasta ./processed/ encontrada',
+            value: `${files.length} arquivo(s) - Caminho: ${localProcessed}`
+        });
+    } else {
+        diagnostics.push({
+            label: '✓ Pasta ./processed/ local',
+            value: 'Não existe (OK)'
+        });
+    }
+
+    // Informações dos diretórios configurados
+    diagnostics.push({ label: 'DATA_DIR configurado', value: DATA_DIR });
+    diagnostics.push({ label: 'UPLOADS_DIR configurado', value: UPLOADS_DIR });
+    diagnostics.push({ label: 'PROCESSED_DIR configurado', value: PROCESSED_DIR });
+
+    res.json({
+        success: true,
+        title: 'Diagnóstico de Caminhos',
+        diagnostics: diagnostics
+    });
+});
+
+// API: Diagnóstico do banco de dados
+app.get('/api/diagnostic/database', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Executando diagnóstico do banco de dados');
+
+    const db = require('./database').db;
+    const dbModule = require('./database');
+
+    // Pega o caminho do DB através do database.js
+    const checkScript = path.join(__dirname, 'check-env.py');
+    const venvActivate = path.join(__dirname, 'venv', 'bin', 'activate');
+    const command = `bash -c "source '${venvActivate}' && python3 -c 'import os; from dotenv import load_dotenv; load_dotenv(); print(os.getenv(\"DB_PATH\", \"./data/database/uploads.db\"))'"`;
+
+    exec(command, (error, stdout, stderr) => {
+        const dbPathFromEnv = stdout.trim();
+
+        const diagnostics = [
+            { label: 'DB_PATH (env)', value: process.env.DB_PATH || 'não definida' },
+            { label: 'DB_PATH visto pelo Python', value: dbPathFromEnv || 'não detectado' }
+        ];
+
+        // Tenta contar registros
+        db.get("SELECT COUNT(*) as count FROM uploads", [], (err, row) => {
+            if (!err && row) {
+                diagnostics.push({ label: 'Registros na tabela uploads', value: row.count });
+            }
+
+            db.get("SELECT COUNT(*) as count FROM users", [], (err, row) => {
+                if (!err && row) {
+                    diagnostics.push({ label: 'Registros na tabela users', value: row.count });
+                }
+
+                res.json({
+                    success: true,
+                    title: 'Diagnóstico do Banco de Dados',
+                    diagnostics: diagnostics
+                });
+            });
+        });
+    });
+});
+
+// API: Diagnóstico completo
+app.get('/api/diagnostic/full', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Executando diagnóstico completo');
+
+    const checkNodeScript = path.join(__dirname, 'check-env.js');
+    const checkPythonScript = path.join(__dirname, 'check-env.py');
+    const venvActivate = path.join(__dirname, 'venv', 'bin', 'activate');
+
+    const commands = [
+        `node '${checkNodeScript}'`,
+        `bash -c "source '${venvActivate}' && python3 '${checkPythonScript}'"`
+    ];
+
+    let output = '';
+
+    // Executa comandos em sequência
+    const executeNext = (index) => {
+        if (index >= commands.length) {
+            res.json({
+                success: true,
+                title: 'Diagnóstico Completo Executado',
+                output: output
+            });
+            return;
+        }
+
+        exec(commands[index], { timeout: 30000 }, (error, stdout, stderr) => {
+            output += `\n${'='.repeat(70)}\n`;
+            output += `COMANDO ${index + 1}: ${commands[index]}\n`;
+            output += `${'='.repeat(70)}\n`;
+            output += stdout || 'Nenhuma saída';
+            if (stderr) {
+                output += `\n\nAvisos/Erros:\n${stderr}`;
+            }
+            if (error) {
+                output += `\n\nErro: ${error.message}`;
+            }
+            output += '\n';
+
+            executeNext(index + 1);
+        });
+    };
+
+    executeNext(0);
 });
 
 // Endpoint para obter dados de acordes de um upload específico
@@ -1099,7 +1299,7 @@ app.get('/api/chords/:uploadId', requireAuth, (req, res) => {
         }
 
         // Caminho do arquivo de acordes
-        const chordsFile = path.join(__dirname, 'processed', `upload_${uploadId}`, 'chords.json');
+        const chordsFile = path.join(PROCESSED_DIR, `upload_${uploadId}`, 'chords.json');
 
         // Verifica se o arquivo existe
         fs.access(chordsFile, fs.constants.F_OK, (err) => {
@@ -1155,7 +1355,7 @@ app.post('/api/chords/:uploadId/regenerate', requireAuth, (req, res) => {
         }
 
         // Diretório processado
-        const processedDir = path.join(__dirname, 'processed', `upload_${uploadId}`);
+        const processedDir = path.join(PROCESSED_DIR, `upload_${uploadId}`);
 
         // Valida stem
         const validStems = ['vocals', 'drums', 'bass', 'other', 'all'];
@@ -1201,7 +1401,189 @@ app.post('/api/chords/:uploadId/regenerate', requireAuth, (req, res) => {
 });
 
 // Servir arquivos processados
-app.use('/processed', express.static(path.join(__dirname, 'processed')));
+app.use('/processed', express.static(PROCESSED_DIR));
+
+// ========== ROTAS DE GERENCIAMENTO DE ARQUIVOS (ADMIN) ==========
+
+// Listar arquivos e diretórios
+app.get('/file-manager', requireAuth, requireAdmin, (req, res) => {
+    logger.info('Recebida requisição para /file-manager');
+    const templatePath = path.join(__dirname, 'templates', 'file-manager.html');
+
+    fs.readFile(templatePath, 'utf8', (err, templateHtml) => {
+        if (err) {
+            logger.error('Erro ao ler template: ' + err.message);
+            return res.status(500).send('Erro ao carregar template');
+        }
+
+        const finalHtml = templateHtml.replace('{{USERNAME}}', req.session.username);
+        res.send(finalHtml);
+    });
+});
+
+// API para listar arquivos/pastas
+app.get('/api/file-manager/list', requireAuth, requireAdmin, (req, res) => {
+    const relativePath = req.query.path || '';
+
+    // Sanitiza o caminho para prevenir path traversal
+    const sanitizedPath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+    const fullPath = path.join(DATA_DIR, sanitizedPath);
+
+    // Garante que o caminho está dentro de DATA_DIR
+    if (!fullPath.startsWith(DATA_DIR)) {
+        logger.warn(`Tentativa de acesso fora do DATA_DIR: ${fullPath}`);
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    logger.info(`Listando diretório: ${fullPath}`);
+
+    fs.readdir(fullPath, { withFileTypes: true }, (err, entries) => {
+        if (err) {
+            logger.error('Erro ao ler diretório: ' + err.message);
+            return res.status(500).json({ error: 'Erro ao ler diretório' });
+        }
+
+        const items = entries.map(entry => {
+            const itemPath = path.join(fullPath, entry.name);
+            const stats = fs.statSync(itemPath);
+
+            return {
+                name: entry.name,
+                isDirectory: entry.isDirectory(),
+                size: entry.isFile() ? stats.size : null,
+                modified: stats.mtime,
+                path: path.join(sanitizedPath, entry.name)
+            };
+        });
+
+        // Ordena: diretórios primeiro, depois arquivos
+        items.sort((a, b) => {
+            if (a.isDirectory && !b.isDirectory) return -1;
+            if (!a.isDirectory && b.isDirectory) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        res.json({
+            currentPath: sanitizedPath,
+            items: items
+        });
+    });
+});
+
+// API para criar pasta
+app.post('/api/file-manager/mkdir', requireAuth, requireAdmin, (req, res) => {
+    const { path: relativePath, name } = req.body;
+
+    if (!name || name.includes('/') || name.includes('\\')) {
+        return res.status(400).json({ error: 'Nome de pasta inválido' });
+    }
+
+    const sanitizedPath = path.normalize(relativePath || '').replace(/^(\.\.[\/\\])+/, '');
+    const fullPath = path.join(DATA_DIR, sanitizedPath, name);
+
+    if (!fullPath.startsWith(DATA_DIR)) {
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    logger.info(`Criando diretório: ${fullPath}`);
+
+    fs.mkdir(fullPath, { recursive: false }, (err) => {
+        if (err) {
+            logger.error('Erro ao criar diretório: ' + err.message);
+            return res.status(500).json({ error: 'Erro ao criar diretório' });
+        }
+
+        res.json({ success: true });
+    });
+});
+
+// API para deletar arquivo ou pasta
+app.delete('/api/file-manager/delete', requireAuth, requireAdmin, (req, res) => {
+    const relativePath = req.query.path || '';
+
+    const sanitizedPath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+    const fullPath = path.join(DATA_DIR, sanitizedPath);
+
+    if (!fullPath.startsWith(DATA_DIR) || fullPath === DATA_DIR) {
+        return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    logger.info(`Deletando: ${fullPath}`);
+
+    fs.stat(fullPath, (err, stats) => {
+        if (err) {
+            logger.error('Erro ao verificar arquivo: ' + err.message);
+            return res.status(500).json({ error: 'Erro ao verificar arquivo' });
+        }
+
+        const deleteFunc = stats.isDirectory()
+            ? (p, cb) => fs.rmdir(p, { recursive: true }, cb)
+            : fs.unlink;
+
+        deleteFunc(fullPath, (err) => {
+            if (err) {
+                logger.error('Erro ao deletar: ' + err.message);
+                return res.status(500).json({ error: 'Erro ao deletar' });
+            }
+
+            res.json({ success: true });
+        });
+    });
+});
+
+// API para download de arquivo
+app.get('/api/file-manager/download', requireAuth, requireAdmin, (req, res) => {
+    const relativePath = req.query.path || '';
+
+    const sanitizedPath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+    const fullPath = path.join(DATA_DIR, sanitizedPath);
+
+    if (!fullPath.startsWith(DATA_DIR)) {
+        return res.status(403).send('Acesso negado');
+    }
+
+    logger.info(`Download: ${fullPath}`);
+
+    res.download(fullPath, (err) => {
+        if (err) {
+            logger.error('Erro ao fazer download: ' + err.message);
+        }
+    });
+});
+
+// API para upload de arquivo
+const fileManagerStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const relativePath = req.body.path || '';
+        const sanitizedPath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+        const fullPath = path.join(DATA_DIR, sanitizedPath);
+
+        if (!fullPath.startsWith(DATA_DIR)) {
+            return cb(new Error('Acesso negado'));
+        }
+
+        cb(null, fullPath);
+    },
+    filename: function (req, file, cb) {
+        cb(null, file.originalname);
+    }
+});
+
+const fileManagerUpload = multer({
+    storage: fileManagerStorage,
+    limits: {
+        fileSize: 500 * 1024 * 1024 // 500MB
+    }
+});
+
+app.post('/api/file-manager/upload', requireAuth, requireAdmin, fileManagerUpload.single('file'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    }
+
+    logger.info(`Arquivo enviado: ${req.file.filename}`);
+    res.json({ success: true, filename: req.file.filename });
+});
 
 // ========== ROTAS DE GERENCIAMENTO DE BANCO DE DADOS (ADMIN) ==========
 

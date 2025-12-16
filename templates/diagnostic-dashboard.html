@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico do Sistema - Music Learning Helper</title>
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/custom.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <style>
+        .diagnostic-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .diagnostic-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .diagnostic-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .diagnostic-card p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        .result-container {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+        .result-container.show {
+            display: block;
+        }
+        .result-container pre {
+            background: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            max-height: 600px;
+            border: 1px solid #ddd;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+        .loading.show {
+            display: block;
+        }
+        .loading i {
+            font-size: 48px;
+            color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error { color: #e74c3c; }
+        .success { color: #27ae60; }
+        .warning { color: #f39c12; }
+        .info { color: #3498db; }
+        .btn-diagnostic {
+            min-width: 150px;
+        }
+        .path-info {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .path-info code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+        <div class="container">
+            <div class="navbar-header">
+                <a class="navbar-brand" href="/">Music Learning Helper</a>
+            </div>
+            <ul class="nav navbar-nav navbar-right">
+                <li><a href="/">Home</a></li>
+                <li class="active"><a href="/diagnostic">Diagnóstico</a></li>
+                <li><a href="/logout">Sair</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container" style="margin-top: 80px;">
+        <h1><i class="fa fa-stethoscope"></i> Diagnóstico do Sistema</h1>
+        <p class="text-muted">Execute diagnósticos para verificar a configuração e o funcionamento do sistema</p>
+        <hr>
+
+        <div class="row">
+            <!-- Diagnóstico de Variáveis de Ambiente (Node.js) -->
+            <div class="col-md-6">
+                <div class="diagnostic-card">
+                    <h3><i class="fa fa-cog"></i> Variáveis de Ambiente (Node.js)</h3>
+                    <p>Verifica se as variáveis de ambiente estão configuradas corretamente no servidor Node.js</p>
+                    <button class="btn btn-primary btn-diagnostic" onclick="runDiagnostic('env-node')">
+                        <i class="fa fa-play"></i> Executar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Diagnóstico de Variáveis de Ambiente (Python) -->
+            <div class="col-md-6">
+                <div class="diagnostic-card">
+                    <h3><i class="fa fa-code"></i> Variáveis de Ambiente (Python)</h3>
+                    <p>Verifica se o Python consegue ler as variáveis de ambiente do .env</p>
+                    <button class="btn btn-info btn-diagnostic" onclick="runDiagnostic('env-python')">
+                        <i class="fa fa-play"></i> Executar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Diagnóstico do Spleeter -->
+            <div class="col-md-6">
+                <div class="diagnostic-card">
+                    <h3><i class="fa fa-music"></i> Instalação do Spleeter</h3>
+                    <p>Verifica se o Spleeter está instalado e funcionando corretamente</p>
+                    <button class="btn btn-success btn-diagnostic" onclick="runDiagnostic('spleeter')">
+                        <i class="fa fa-play"></i> Executar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Diagnóstico de Caminhos e Arquivos -->
+            <div class="col-md-6">
+                <div class="diagnostic-card">
+                    <h3><i class="fa fa-folder-open"></i> Verificação de Caminhos</h3>
+                    <p>Verifica os caminhos de diretórios e lista arquivos existentes</p>
+                    <button class="btn btn-warning btn-diagnostic" onclick="runDiagnostic('paths')">
+                        <i class="fa fa-play"></i> Executar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Diagnóstico do Banco de Dados -->
+            <div class="col-md-6">
+                <div class="diagnostic-card">
+                    <h3><i class="fa fa-database"></i> Conexão do Banco de Dados</h3>
+                    <p>Verifica a conexão e localização do banco de dados SQLite</p>
+                    <button class="btn btn-primary btn-diagnostic" onclick="runDiagnostic('database')">
+                        <i class="fa fa-play"></i> Executar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Diagnóstico Completo -->
+            <div class="col-md-6">
+                <div class="diagnostic-card">
+                    <h3><i class="fa fa-check-circle"></i> Diagnóstico Completo</h3>
+                    <p>Executa todos os diagnósticos em sequência</p>
+                    <button class="btn btn-danger btn-diagnostic" onclick="runDiagnostic('full')">
+                        <i class="fa fa-play-circle"></i> Executar Todos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <i class="fa fa-spinner"></i>
+            <p class="text-muted">Executando diagnóstico...</p>
+        </div>
+
+        <!-- Resultado -->
+        <div class="result-container" id="result">
+            <h3><i class="fa fa-file-text"></i> Resultado do Diagnóstico</h3>
+            <div id="result-content"></div>
+        </div>
+
+        <hr>
+        <a href="/" class="btn btn-default"><i class="fa fa-arrow-left"></i> Voltar para Home</a>
+    </div>
+
+    <script src="/node_modules/jquery/dist/jquery.min.js"></script>
+    <script src="/node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
+    <script>
+        function runDiagnostic(type) {
+            // Mostra loading
+            document.getElementById('loading').classList.add('show');
+            document.getElementById('result').classList.remove('show');
+
+            // Faz requisição
+            fetch('/api/diagnostic/' + type)
+                .then(response => response.json())
+                .then(data => {
+                    // Esconde loading
+                    document.getElementById('loading').classList.remove('show');
+
+                    // Mostra resultado
+                    const resultDiv = document.getElementById('result');
+                    const contentDiv = document.getElementById('result-content');
+
+                    if (data.error) {
+                        contentDiv.innerHTML = `
+                            <div class="alert alert-danger">
+                                <strong>Erro:</strong> ${data.error}
+                            </div>
+                        `;
+                    } else {
+                        let html = '';
+
+                        if (data.title) {
+                            html += `<h4 class="${data.success ? 'success' : 'error'}">${data.title}</h4>`;
+                        }
+
+                        if (data.command) {
+                            html += `
+                                <div class="path-info">
+                                    <strong>Comando executado:</strong><br>
+                                    <code>${data.command}</code>
+                                </div>
+                            `;
+                        }
+
+                        if (data.output) {
+                            html += `
+                                <h5>Saída:</h5>
+                                <pre>${data.output}</pre>
+                            `;
+                        }
+
+                        if (data.stderr) {
+                            html += `
+                                <h5 class="warning">Avisos/Erros:</h5>
+                                <pre>${data.stderr}</pre>
+                            `;
+                        }
+
+                        if (data.diagnostics) {
+                            html += '<h5>Informações:</h5>';
+                            data.diagnostics.forEach(diag => {
+                                html += `
+                                    <div class="path-info">
+                                        <strong>${diag.label}:</strong><br>
+                                        <code>${diag.value}</code>
+                                    </div>
+                                `;
+                            });
+                        }
+
+                        contentDiv.innerHTML = html;
+                    }
+
+                    resultDiv.classList.add('show');
+
+                    // Scroll para o resultado
+                    resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                })
+                .catch(error => {
+                    document.getElementById('loading').classList.remove('show');
+                    document.getElementById('result-content').innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>Erro na requisição:</strong> ${error.message}
+                        </div>
+                    `;
+                    document.getElementById('result').classList.add('show');
+                });
+        }
+    </script>
+</body>
+</html>

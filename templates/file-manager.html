@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gerenciador de Arquivos - Admin</title>
+
+    <!-- Bootstrap -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/custom.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+
+    <style>
+        .file-manager-container {
+            padding: 20px;
+        }
+        .breadcrumb {
+            background-color: #f5f5f5;
+            padding: 10px 15px;
+            margin-bottom: 20px;
+        }
+        .file-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        .file-item:hover {
+            background-color: #f9f9f9;
+        }
+        .file-icon {
+            font-size: 24px;
+            margin-right: 10px;
+            width: 30px;
+            text-align: center;
+        }
+        .file-name {
+            cursor: pointer;
+            flex: 1;
+        }
+        .file-size {
+            color: #999;
+            margin-right: 15px;
+        }
+        .file-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .toolbar {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .file-list {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: white;
+        }
+        .empty-folder {
+            padding: 40px;
+            text-align: center;
+            color: #999;
+        }
+        .modal-backdrop {
+            background-color: rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="file-manager-container">
+        <div class="row">
+            <div class="col-md-12">
+                <h2>
+                    <i class="fa fa-folder-open"></i> Gerenciador de Arquivos
+                    <a href="/" class="btn btn-default pull-right">
+                        <i class="fa fa-home"></i> Voltar
+                    </a>
+                </h2>
+                <hr>
+            </div>
+        </div>
+
+        <!-- Breadcrumb -->
+        <div class="row">
+            <div class="col-md-12">
+                <ol class="breadcrumb" id="breadcrumb">
+                    <li><a href="#" data-path=""><i class="fa fa-home"></i> Raiz</a></li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <button class="btn btn-primary" onclick="showCreateFolderModal()">
+                <i class="fa fa-folder"></i> Nova Pasta
+            </button>
+            <button class="btn btn-success" onclick="showUploadModal()">
+                <i class="fa fa-upload"></i> Enviar Arquivo
+            </button>
+            <button class="btn btn-default" onclick="loadFiles(currentPath)">
+                <i class="fa fa-refresh"></i> Atualizar
+            </button>
+        </div>
+
+        <!-- Lista de arquivos -->
+        <div class="file-list" id="fileList">
+            <div class="empty-folder">
+                <i class="fa fa-spinner fa-spin fa-3x"></i>
+                <p>Carregando...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para criar pasta -->
+    <div class="modal fade" id="createFolderModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">Nova Pasta</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="folderName">Nome da Pasta:</label>
+                        <input type="text" class="form-control" id="folderName" placeholder="Digite o nome da pasta">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="createFolder()">Criar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para upload -->
+    <div class="modal fade" id="uploadModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    <h4 class="modal-title">Enviar Arquivo</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="fileInput">Selecione um arquivo:</label>
+                        <input type="file" class="form-control" id="fileInput">
+                    </div>
+                    <div class="progress" id="uploadProgress" style="display: none;">
+                        <div class="progress-bar" role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" onclick="uploadFile()">Enviar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <script src="/js/bootstrap.min.js"></script>
+
+    <script>
+        let currentPath = '';
+
+        // Carrega arquivos ao iniciar
+        $(document).ready(function() {
+            loadFiles('');
+        });
+
+        // Carrega lista de arquivos
+        function loadFiles(path) {
+            currentPath = path;
+            updateBreadcrumb(path);
+
+            $.ajax({
+                url: '/api/file-manager/list',
+                method: 'GET',
+                data: { path: path },
+                success: function(data) {
+                    renderFileList(data.items);
+                },
+                error: function(xhr) {
+                    alert('Erro ao carregar arquivos: ' + (xhr.responseJSON?.error || 'Erro desconhecido'));
+                }
+            });
+        }
+
+        // Renderiza lista de arquivos
+        function renderFileList(items) {
+            const container = $('#fileList');
+            container.empty();
+
+            if (items.length === 0) {
+                container.html('<div class="empty-folder"><i class="fa fa-folder-o fa-3x"></i><p>Pasta vazia</p></div>');
+                return;
+            }
+
+            items.forEach(item => {
+                const icon = item.isDirectory ? 'fa-folder' : getFileIcon(item.name);
+                const size = item.isDirectory ? '' : formatFileSize(item.size);
+                const date = new Date(item.modified).toLocaleString('pt-BR');
+
+                const row = $('<div class="file-item d-flex align-items-center"></div>');
+
+                const iconSpan = $('<i class="fa ' + icon + ' file-icon"></i>');
+                const nameDiv = $('<div class="file-name"></div>').text(item.name);
+                const sizeSpan = $('<span class="file-size"></span>').text(size);
+                const dateSpan = $('<span class="file-size"></span>').text(date);
+                const actionsDiv = $('<div class="file-actions"></div>');
+
+                if (item.isDirectory) {
+                    nameDiv.on('click', function() {
+                        loadFiles(item.path);
+                    });
+                } else {
+                    const downloadBtn = $('<button class="btn btn-xs btn-primary"></button>')
+                        .html('<i class="fa fa-download"></i>')
+                        .attr('title', 'Download')
+                        .on('click', function() {
+                            downloadFile(item.path);
+                        });
+                    actionsDiv.append(downloadBtn);
+                }
+
+                const deleteBtn = $('<button class="btn btn-xs btn-danger"></button>')
+                    .html('<i class="fa fa-trash"></i>')
+                    .attr('title', 'Deletar')
+                    .on('click', function() {
+                        deleteItem(item.path, item.name);
+                    });
+
+                actionsDiv.append(deleteBtn);
+
+                row.append(iconSpan, nameDiv, sizeSpan, dateSpan, actionsDiv);
+                container.append(row);
+            });
+        }
+
+        // Atualiza breadcrumb
+        function updateBreadcrumb(path) {
+            const breadcrumb = $('#breadcrumb');
+            breadcrumb.empty();
+
+            const rootLink = $('<li></li>').html('<a href="#" data-path=""><i class="fa fa-home"></i> Raiz</a>');
+            rootLink.find('a').on('click', function(e) {
+                e.preventDefault();
+                loadFiles('');
+            });
+            breadcrumb.append(rootLink);
+
+            if (path) {
+                const parts = path.split(/[/\\]/).filter(p => p);
+                let accumulatedPath = '';
+
+                parts.forEach((part, index) => {
+                    accumulatedPath += (accumulatedPath ? '/' : '') + part;
+                    const isLast = index === parts.length - 1;
+                    const partPath = accumulatedPath;
+
+                    if (isLast) {
+                        breadcrumb.append($('<li class="active"></li>').text(part));
+                    } else {
+                        const link = $('<li></li>').html('<a href="#"></a>');
+                        link.find('a').text(part).on('click', function(e) {
+                            e.preventDefault();
+                            loadFiles(partPath);
+                        });
+                        breadcrumb.append(link);
+                    }
+                });
+            }
+        }
+
+        // Ícone por tipo de arquivo
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = {
+                'jpg': 'fa-file-image-o',
+                'jpeg': 'fa-file-image-o',
+                'png': 'fa-file-image-o',
+                'gif': 'fa-file-image-o',
+                'mp3': 'fa-file-audio-o',
+                'wav': 'fa-file-audio-o',
+                'ogg': 'fa-file-audio-o',
+                'mp4': 'fa-file-video-o',
+                'avi': 'fa-file-video-o',
+                'pdf': 'fa-file-pdf-o',
+                'doc': 'fa-file-word-o',
+                'docx': 'fa-file-word-o',
+                'xls': 'fa-file-excel-o',
+                'xlsx': 'fa-file-excel-o',
+                'txt': 'fa-file-text-o',
+                'zip': 'fa-file-archive-o',
+                'rar': 'fa-file-archive-o',
+                'js': 'fa-file-code-o',
+                'json': 'fa-file-code-o',
+                'html': 'fa-file-code-o',
+                'css': 'fa-file-code-o'
+            };
+            return icons[ext] || 'fa-file-o';
+        }
+
+        // Formata tamanho de arquivo
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Modal para criar pasta
+        function showCreateFolderModal() {
+            $('#folderName').val('');
+            $('#createFolderModal').modal('show');
+        }
+
+        // Criar pasta
+        function createFolder() {
+            const name = $('#folderName').val().trim();
+            if (!name) {
+                alert('Digite um nome para a pasta');
+                return;
+            }
+
+            $.ajax({
+                url: '/api/file-manager/mkdir',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ path: currentPath, name: name }),
+                success: function() {
+                    $('#createFolderModal').modal('hide');
+                    loadFiles(currentPath);
+                },
+                error: function(xhr) {
+                    alert('Erro ao criar pasta: ' + (xhr.responseJSON?.error || 'Erro desconhecido'));
+                }
+            });
+        }
+
+        // Modal para upload
+        function showUploadModal() {
+            $('#fileInput').val('');
+            $('#uploadProgress').hide();
+            $('#uploadModal').modal('show');
+        }
+
+        // Upload de arquivo
+        function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files.length) {
+                alert('Selecione um arquivo');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('path', currentPath);
+
+            const progressBar = $('#uploadProgress');
+            progressBar.show();
+
+            $.ajax({
+                url: '/api/file-manager/upload',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhr: function() {
+                    const xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            const percentComplete = (e.loaded / e.total) * 100;
+                            progressBar.find('.progress-bar')
+                                .css('width', percentComplete + '%')
+                                .text(Math.round(percentComplete) + '%');
+                        }
+                    });
+                    return xhr;
+                },
+                success: function() {
+                    $('#uploadModal').modal('hide');
+                    loadFiles(currentPath);
+                },
+                error: function(xhr) {
+                    alert('Erro ao enviar arquivo: ' + (xhr.responseJSON?.error || 'Erro desconhecido'));
+                }
+            });
+        }
+
+        // Download de arquivo
+        function downloadFile(path) {
+            window.location.href = '/api/file-manager/download?path=' + encodeURIComponent(path);
+        }
+
+        // Deletar item
+        function deleteItem(path, name) {
+            if (!confirm('Tem certeza que deseja deletar "' + name + '"?')) {
+                return;
+            }
+
+            $.ajax({
+                url: '/api/file-manager/delete?path=' + encodeURIComponent(path),
+                method: 'DELETE',
+                success: function() {
+                    loadFiles(currentPath);
+                },
+                error: function(xhr) {
+                    alert('Erro ao deletar: ' + (xhr.responseJSON?.error || 'Erro desconhecido'));
+                }
+            });
+        }
+
+        // Atalho para voltar (tecla Backspace)
+        $(document).on('keydown', function(e) {
+            if (e.key === 'Backspace' && !$(e.target).is('input, textarea')) {
+                e.preventDefault();
+                if (currentPath) {
+                    const parts = currentPath.split(/[/\\]/).filter(p => p);
+                    parts.pop();
+                    loadFiles(parts.join('/'));
+                }
+            }
+        });
+    </script>
+</body>
+</html>
