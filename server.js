@@ -10,6 +10,8 @@ const { dbOperations } = require('./database');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const { requireAuth, requireAdmin, createDefaultAdmin } = require('./auth');
+const archiver = require('archiver');
+const AdmZip = require('adm-zip');
 
 const app = express();
 const PORT = process.env.PORT || 3000;  // Lightsail define PORT automaticamente, localmente fica 3000
@@ -838,6 +840,12 @@ app.get('/my-uploads', requireAuth, (req, res) => {
                 </a>` :
                 '';
 
+            const exportLink = u.processing_status === 'completed' ?
+                `<a href="/api/music/export/${u.id}" class="btn btn-sm btn-info" style="margin: 2px;" title="Exportar música processada como ZIP">
+                    <i class="fa fa-download"></i> Exportar
+                </a>` :
+                '';
+
             return `
                 <div class="col-md-6" style="margin-bottom: 15px;">
                     <div class="ticketBox">
@@ -853,6 +861,7 @@ app.get('/my-uploads', requireAuth, (req, res) => {
                                 <br>
                                 <div style="margin-top: 5px;">
                                     ${playLink}
+                                    ${exportLink}
                                     <a href="/edit/${u.id}" class="btn btn-sm btn-warning" style="margin: 2px;">
                                         <i class="fa fa-edit"></i> Editar
                                     </a>
@@ -2094,6 +2103,276 @@ app.post('/database/table/:tableName/delete/:id', requireAuth, requireAdmin, (re
             res.redirect(`/database/table/${tableName}`);
         });
     });
+});
+
+// ========== ROTAS DE EXPORTAÇÃO E IMPORTAÇÃO DE MÚSICAS ==========
+
+// Exportar música processada como ZIP
+app.get('/api/music/export/:uploadId', requireAuth, (req, res) => {
+    const uploadId = req.params.uploadId;
+    const userId = req.session.userId;
+    const isAdmin = req.session.isAdmin;
+
+    logger.info(`Iniciando exportação da música ID ${uploadId} pelo usuário ${userId}`);
+
+    // Buscar informações da música no banco de dados
+    const db = require('./database').db;
+    db.get('SELECT * FROM uploads WHERE id = ?', [uploadId], (err, upload) => {
+        if (err) {
+            logger.error('Erro ao buscar música: ' + err.message);
+            return res.status(500).json({ error: 'Erro ao buscar música' });
+        }
+
+        if (!upload) {
+            logger.warn(`Música ${uploadId} não encontrada`);
+            return res.status(404).json({ error: 'Música não encontrada' });
+        }
+
+        // Verificar permissões (usuário só pode exportar suas próprias músicas, admin pode exportar todas)
+        if (!isAdmin && upload.user_id !== userId) {
+            logger.warn(`Usuário ${userId} tentou exportar música ${uploadId} de outro usuário`);
+            return res.status(403).json({ error: 'Você não tem permissão para exportar esta música' });
+        }
+
+        // Verificar se o processamento foi concluído
+        if (upload.processing_status !== 'completed') {
+            logger.warn(`Tentativa de exportar música ${uploadId} com status ${upload.processing_status}`);
+            return res.status(400).json({ error: 'Apenas músicas processadas podem ser exportadas' });
+        }
+
+        // Criar objeto de metadados
+        const metadata = {
+            id: upload.id,
+            song_name: upload.song_name,
+            artist: upload.artist,
+            original_filename: upload.original_filename,
+            file_size: upload.file_size,
+            upload_date: upload.upload_date,
+            processing_status: upload.processing_status,
+            export_date: new Date().toISOString(),
+            export_format_version: '1.0'
+        };
+
+        // Configurar o nome do arquivo ZIP
+        const zipFilename = `${upload.artist || 'Unknown'} - ${upload.song_name || 'Untitled'}.zip`
+            .replace(/[^a-z0-9\s\-_.]/gi, '_'); // Sanitizar nome do arquivo
+
+        // Configurar headers para download
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+
+        // Criar stream do ZIP
+        const archive = archiver('zip', {
+            zlib: { level: 9 } // Nível máximo de compressão
+        });
+
+        // Tratar erros do archiver
+        archive.on('error', (err) => {
+            logger.error('Erro ao criar ZIP: ' + err.message);
+            res.status(500).json({ error: 'Erro ao criar arquivo de exportação' });
+        });
+
+        // Enviar o ZIP para o cliente
+        archive.pipe(res);
+
+        // Adicionar metadata.json ao ZIP
+        archive.append(JSON.stringify(metadata, null, 2), { name: 'metadata.json' });
+
+        // Adicionar arquivo original
+        const originalPath = upload.file_path;
+        if (fs.existsSync(originalPath)) {
+            archive.file(originalPath, { name: `original/${upload.original_filename}` });
+            logger.info(`Adicionado arquivo original: ${originalPath}`);
+        } else {
+            logger.warn(`Arquivo original não encontrado: ${originalPath}`);
+        }
+
+        // Adicionar arquivos processados
+        const processedPath = path.join(PROCESSED_DIR, `upload_${uploadId}`);
+        if (fs.existsSync(processedPath)) {
+            // Adicionar stems (MP3)
+            const stems = ['vocals.mp3', 'drums.mp3', 'bass.mp3', 'other.mp3'];
+            stems.forEach(stem => {
+                const stemPath = path.join(processedPath, stem);
+                if (fs.existsSync(stemPath)) {
+                    archive.file(stemPath, { name: `stems/${stem}` });
+                    logger.info(`Adicionado stem: ${stem}`);
+                }
+            });
+
+            // Adicionar waveforms (PNG)
+            const waveforms = ['vocals.png', 'drums.png', 'bass.png', 'other.png'];
+            waveforms.forEach(waveform => {
+                const waveformPath = path.join(processedPath, waveform);
+                if (fs.existsSync(waveformPath)) {
+                    archive.file(waveformPath, { name: `waveforms/${waveform}` });
+                    logger.info(`Adicionado waveform: ${waveform}`);
+                }
+            });
+
+            // Adicionar análise de acordes
+            const chordsPath = path.join(processedPath, 'chords.json');
+            if (fs.existsSync(chordsPath)) {
+                archive.file(chordsPath, { name: 'analysis/chords.json' });
+                logger.info('Adicionado chords.json');
+            }
+        } else {
+            logger.warn(`Diretório de arquivos processados não encontrado: ${processedPath}`);
+        }
+
+        // Finalizar o ZIP
+        archive.finalize();
+        logger.info(`Exportação da música ${uploadId} finalizada`);
+    });
+});
+
+// Configurar multer para upload de arquivo ZIP
+const zipUpload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: function (req, file, cb) {
+        if (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed') {
+            cb(null, true);
+        } else {
+            cb(new Error('Apenas arquivos ZIP são permitidos!'));
+        }
+    },
+    limits: {
+        fileSize: 200 * 1024 * 1024 // Limite de 200MB para ZIP
+    }
+});
+
+// Importar música processada de um arquivo ZIP
+app.post('/api/music/import', requireAuth, zipUpload.single('zipFile'), (req, res) => {
+    const userId = req.session.userId;
+
+    logger.info(`Iniciando importação de música pelo usuário ${userId}`);
+
+    if (!req.file) {
+        return res.status(400).json({ error: 'Nenhum arquivo ZIP foi enviado' });
+    }
+
+    try {
+        // Ler o arquivo ZIP da memória
+        const zip = new AdmZip(req.file.buffer);
+        const zipEntries = zip.getEntries();
+
+        // Buscar e validar metadata.json
+        const metadataEntry = zipEntries.find(entry => entry.entryName === 'metadata.json');
+        if (!metadataEntry) {
+            logger.warn('Arquivo metadata.json não encontrado no ZIP');
+            return res.status(400).json({ error: 'Arquivo de metadados não encontrado no ZIP' });
+        }
+
+        const metadata = JSON.parse(metadataEntry.getData().toString('utf8'));
+        logger.info(`Metadata encontrado: ${metadata.song_name} - ${metadata.artist}`);
+
+        // Validar campos obrigatórios
+        if (!metadata.song_name || !metadata.original_filename) {
+            return res.status(400).json({ error: 'Metadados incompletos no arquivo ZIP' });
+        }
+
+        // Buscar arquivo original
+        const originalEntry = zipEntries.find(entry => entry.entryName.startsWith('original/'));
+        if (!originalEntry) {
+            logger.warn('Arquivo original não encontrado no ZIP');
+            return res.status(400).json({ error: 'Arquivo original não encontrado no ZIP' });
+        }
+
+        // Salvar arquivo original
+        const timestamp = Date.now();
+        const randomNum = Math.round(Math.random() * 1E9);
+        const savedFilename = `${timestamp}-${randomNum}-${metadata.original_filename}`;
+        const uploadPath = path.join(UPLOADS_DIR, savedFilename);
+
+        fs.writeFileSync(uploadPath, originalEntry.getData());
+        const fileStats = fs.statSync(uploadPath);
+        logger.info(`Arquivo original salvo em: ${uploadPath}`);
+
+        // Inserir registro no banco de dados
+        const db = require('./database').db;
+        db.run(
+            `INSERT INTO uploads (original_filename, saved_filename, file_path, file_size,
+             upload_date, processing_status, song_name, artist, user_id)
+             VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)`,
+            [
+                metadata.original_filename,
+                savedFilename,
+                uploadPath,
+                fileStats.size,
+                'completed', // Já está processado
+                metadata.song_name,
+                metadata.artist || null,
+                userId
+            ],
+            function(err) {
+                if (err) {
+                    logger.error('Erro ao inserir música no banco: ' + err.message);
+                    // Remover arquivo salvo em caso de erro
+                    fs.unlinkSync(uploadPath);
+                    return res.status(500).json({ error: 'Erro ao registrar música no banco de dados' });
+                }
+
+                const newUploadId = this.lastID;
+                logger.info(`Música registrada no banco com ID ${newUploadId}`);
+
+                // Criar diretório para arquivos processados
+                const processedPath = path.join(PROCESSED_DIR, `upload_${newUploadId}`);
+                if (!fs.existsSync(processedPath)) {
+                    fs.mkdirSync(processedPath, { recursive: true });
+                }
+
+                // Extrair stems
+                const stemEntries = zipEntries.filter(entry => entry.entryName.startsWith('stems/'));
+                stemEntries.forEach(entry => {
+                    const filename = path.basename(entry.entryName);
+                    const destPath = path.join(processedPath, filename);
+                    fs.writeFileSync(destPath, entry.getData());
+                    logger.info(`Stem extraído: ${filename}`);
+                });
+
+                // Extrair waveforms
+                const waveformEntries = zipEntries.filter(entry => entry.entryName.startsWith('waveforms/'));
+                waveformEntries.forEach(entry => {
+                    const filename = path.basename(entry.entryName);
+                    const destPath = path.join(processedPath, filename);
+                    fs.writeFileSync(destPath, entry.getData());
+                    logger.info(`Waveform extraído: ${filename}`);
+                });
+
+                // Extrair análise de acordes
+                const chordsEntry = zipEntries.find(entry => entry.entryName === 'analysis/chords.json');
+                if (chordsEntry) {
+                    const destPath = path.join(processedPath, 'chords.json');
+                    fs.writeFileSync(destPath, chordsEntry.getData());
+                    logger.info('Chords.json extraído');
+                }
+
+                // Atualizar caminho dos arquivos processados no banco
+                db.run(
+                    'UPDATE uploads SET processed_path = ? WHERE id = ?',
+                    [`/processed/upload_${newUploadId}`, newUploadId],
+                    (err) => {
+                        if (err) {
+                            logger.error('Erro ao atualizar processed_path: ' + err.message);
+                        }
+                    }
+                );
+
+                logger.info(`Importação concluída com sucesso. Upload ID: ${newUploadId}`);
+                res.json({
+                    success: true,
+                    message: 'Música importada com sucesso',
+                    uploadId: newUploadId,
+                    songName: metadata.song_name,
+                    artist: metadata.artist
+                });
+            }
+        );
+
+    } catch (error) {
+        logger.error('Erro ao processar arquivo ZIP: ' + error.message);
+        res.status(500).json({ error: 'Erro ao processar arquivo ZIP: ' + error.message });
+    }
 });
 
 // Start do servidor

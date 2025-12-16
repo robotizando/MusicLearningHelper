@@ -90,6 +90,30 @@
                   <div class="tab-content">
 
                     <div role="tabpanel" class="tab-pane fade in active" id="uploads">
+
+                      <!-- Seção de Importação -->
+                      <div class="row" style="margin-bottom: 20px;">
+                        <div class="col-md-12">
+                          <div class="ticketBox" style="background-color: #f8f9fa; padding: 15px;">
+                            <h4 style="margin-top: 0; color: #333;">
+                              <i class="fa fa-upload"></i> Importar Música Processada
+                            </h4>
+                            <p style="color: #666; font-size: 14px;">
+                              Faça upload de um arquivo ZIP exportado anteriormente para importar uma música já processada.
+                            </p>
+                            <form id="importForm" enctype="multipart/form-data" style="margin-top: 10px;">
+                              <div class="form-group">
+                                <input type="file" id="zipFile" name="zipFile" accept=".zip" class="form-control" required>
+                              </div>
+                              <button type="submit" class="btn btn-primary" id="importBtn">
+                                <i class="fa fa-upload"></i> Importar
+                              </button>
+                              <span id="importStatus" style="margin-left: 10px; font-weight: bold;"></span>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+
                     	<div class="row">
                         {{UPLOADS}}
                       </div>
@@ -110,5 +134,61 @@
     <!-- Include all compiled plugins (below), or include individual files as needed -->
     <script src="/js/bootstrap.min.js"></script>
     <script src="/js/allscript.js"></script>
+
+    <script>
+      // Script para importação de música
+      $(document).ready(function() {
+        $('#importForm').on('submit', function(e) {
+          e.preventDefault();
+
+          var fileInput = $('#zipFile')[0];
+          if (!fileInput.files || !fileInput.files[0]) {
+            alert('Por favor, selecione um arquivo ZIP');
+            return;
+          }
+
+          var formData = new FormData();
+          formData.append('zipFile', fileInput.files[0]);
+
+          // Desabilitar botão e mostrar status
+          $('#importBtn').prop('disabled', true);
+          $('#importStatus').text('Importando...').css('color', 'blue');
+
+          $.ajax({
+            url: '/api/music/import',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+              $('#importStatus')
+                .text('✓ Importado com sucesso!')
+                .css('color', 'green');
+
+              // Resetar formulário
+              $('#importForm')[0].reset();
+              $('#importBtn').prop('disabled', false);
+
+              // Recarregar página após 2 segundos
+              setTimeout(function() {
+                location.reload();
+              }, 2000);
+            },
+            error: function(xhr) {
+              var errorMsg = 'Erro ao importar música';
+              if (xhr.responseJSON && xhr.responseJSON.error) {
+                errorMsg = xhr.responseJSON.error;
+              }
+
+              $('#importStatus')
+                .text('✗ ' + errorMsg)
+                .css('color', 'red');
+
+              $('#importBtn').prop('disabled', false);
+            }
+          });
+        });
+      });
+    </script>
   </body>
 </html>
